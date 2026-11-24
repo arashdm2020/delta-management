@@ -97,9 +97,14 @@ export async function requestOtp(
     const diagnostic = smsFailureDiagnostic(error);
     console.error("auth.otp.send.failed", diagnostic);
     await db.$transaction(async (tx) => {
-      await tx.oTPChallenge.update({ where: { id }, data: { consumedAt: new Date() } });
+      // An uncertain provider response may follow an actual send. Keep the
+      // original challenge usable without resending or claiming delivery.
+      if (diagnostic.reason !== "UNKNOWN")
+        await tx.oTPChallenge.update({ where: { id }, data: { consumedAt: new Date() } });
       await audit("auth.otp.send.failed", null, id, diagnostic, tx);
     });
+    if (diagnostic.reason === "UNKNOWN")
+      return { challengeId: id, deliveryStatus: "unknown" as const };
     throw new DomainError("SMS", "ارسال پیامک در دسترس نیست.");
   }
   return { challengeId: id };

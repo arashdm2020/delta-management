@@ -16,6 +16,7 @@ export function AuthForm() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [until, setUntil] = useState(0);
+  const [deliveryUnknown, setDeliveryUnknown] = useState(false);
   useEffect(() => {
     const timer = window.setTimeout(() => {
       try {
@@ -29,6 +30,7 @@ export function AuthForm() {
         ) {
           setChallenge(saved.id);
           setUntil(saved.resendAt);
+          setDeliveryUnknown(saved.deliveryStatus === "unknown");
         } else sessionStorage.removeItem("delta-otp-challenge");
       } catch {
         /* Browser storage may be unavailable. */
@@ -54,6 +56,7 @@ export function AuthForm() {
       if (!response.ok) throw new Error(result.error);
       setChallenge(result.challengeId);
       setUntil(Date.now() + 60000);
+      setDeliveryUnknown(result.deliveryStatus === "unknown");
       try {
         sessionStorage.setItem(
           "delta-otp-challenge",
@@ -61,6 +64,7 @@ export function AuthForm() {
             id: result.challengeId,
             resendAt: Date.now() + 60000,
             expiresAt: Date.now() + 300000,
+            deliveryStatus: result.deliveryStatus,
           }),
         );
       } catch {
@@ -138,6 +142,7 @@ export function AuthForm() {
               sessionStorage.removeItem("delta-otp-challenge");
               setChallenge("");
               setCode("");
+              setDeliveryUnknown(false);
             }}
           >
             تغییر شماره / درخواست کد جدید
@@ -172,6 +177,11 @@ export function AuthForm() {
             {busy ? "در حال ارسال…" : "دریافت کد ورود"}
           </Button>
         </form>
+      )}
+      {challenge && deliveryUnknown && (
+        <p role="status" className="mt-4 rounded-xl bg-soft p-3 text-sm leading-7 text-secondary">
+          نتیجهٔ سرویس ارسال قطعی نیست. اگر پیامک را دریافت کرده‌اید، کد آن را همین‌جا وارد کنید؛ پیامک دیگری خودکار ارسال نمی‌شود.
+        </p>
       )}
       {error && (
         <p

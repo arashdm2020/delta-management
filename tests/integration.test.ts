@@ -16,6 +16,25 @@ let admin: Awaited<ReturnType<typeof db.user.create>> & {
 };
 let resident: typeof admin;
 let tenant: typeof admin;
+test("uncertain provider acceptance retains a verifiable OTP without duplicate sending", async () => {
+  const { SmsProviderError } = await import("../src/modules/sms/errors");
+  let sent = 0, code = "";
+  const original = console.error;
+  console.error = () => {};
+  try {
+    const result = await requestOtp("+989188000002", "sms-uncertain", async (_phone, value) => {
+      sent++; code = value;
+      throw new SmsProviderError("UNKNOWN", 200, "message_id");
+    });
+    assert.equal(result.deliveryStatus, "unknown");
+    const challenge = await db.oTPChallenge.findUniqueOrThrow({ where: { id: result.challengeId } });
+    assert.equal(challenge.consumedAt, null);
+    await assert.rejects(requestOtp("+989188000002", "sms-uncertain", async () => { sent++; }));
+    assert.equal(sent, 1);
+    assert.ok(await verifyOtp(result.challengeId, code, "sms-uncertain"));
+    await assert.rejects(verifyOtp(result.challengeId, code, "sms-uncertain"));
+  } finally { console.error = original; }
+});
 test("OTP sender failures consume challenges and retain only safe provider diagnostics", async () => {
   const { SmsProviderError } = await import("../src/modules/sms/errors");
   const original = console.error;

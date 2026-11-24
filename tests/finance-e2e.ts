@@ -99,6 +99,22 @@ try {
     headless: true,
     ...(existsSync(chrome) ? { executablePath: chrome } : {}),
   });
+  const recovery = await browser.newContext();
+  const recoveryPage = await recovery.newPage();
+  let recoveryRequests = 0;
+  await recoveryPage.route("**/api/auth/request", async route => {
+    recoveryRequests++;
+    await route.fulfill({ json: { challengeId: "e909e093-14fb-4d30-a8da-30cb9f4302d5", deliveryStatus: "unknown" } });
+  });
+  await recoveryPage.goto(origin + "/login");
+  await recoveryPage.getByLabel("شماره تلفن همراه", { exact: true }).fill("09111000008");
+  await recoveryPage.getByRole("button", { name: "دریافت کد ورود", exact: true }).click();
+  await expect(recoveryPage.getByLabel("کد یک‌بارمصرف پیامک‌شده", { exact: true })).toBeVisible();
+  await expect(recoveryPage.getByRole("status").filter({ hasText: "نتیجهٔ سرویس ارسال قطعی نیست" })).toBeVisible();
+  await recoveryPage.reload();
+  await expect(recoveryPage.getByLabel("کد یک‌بارمصرف پیامک‌شده", { exact: true })).toBeVisible();
+  assert.equal(recoveryRequests, 1, "Reload must not resend an uncertain submission");
+  await recovery.close();
   const admin = await browser.newContext({
     viewport: { width: 1440, height: 1000 },
     serviceWorkers: "allow",
