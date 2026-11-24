@@ -893,7 +893,43 @@ test("SMS dispatch rechecks financial truth, reminder stages, meeting cancellati
     where: { status: "ISSUED" },
     include: { allocations: true, corrections: true },
   });
-  const outstanding = invoices.find((i) => invoiceState(i).outstanding > 0n)!;
+  // A fresh real-service invoice avoids depending on earlier workers and today's date.
+  const { currentPeriod, periodBounds } =
+    await import("../src/modules/billing/calendar");
+  const bounds = periodBounds(currentPeriod());
+  const building = await db.building.findUniqueOrThrow({
+    where: { key: "delta" },
+  });
+  const freshUnit = await db.unit.create({
+    data: {
+      buildingId: building.id,
+      number: "SMS-ISOLATED-TIMING",
+      floor: "TEST",
+    },
+  });
+  const membership = await db.unitMembership.create({
+    data: {
+      unitId: freshUnit.id,
+      userId: owner.id,
+      kind: "OWNER",
+      startsAt: new Date(bounds.startsAt.getTime() - 1000),
+    },
+  });
+  await db.billingResponsibility.create({
+    data: {
+      unitId: freshUnit.id,
+      userId: owner.id,
+      membershipId: membership.id,
+      startsAt: membership.startsAt,
+    },
+  });
+  const { generateInvoices } = await import("../src/modules/billing/service");
+  await generateInvoices(admin, bounds.key);
+  const outstanding = await db.invoice.findFirstOrThrow({
+    where: { unitId: freshUnit.id },
+    include: { allocations: true, corrections: true },
+  });
+
   const paid = invoices.find((i) => invoiceState(i).outstanding === 0n)!;
   assert.ok(outstanding);
   assert.ok(paid);
@@ -1176,7 +1212,9 @@ test("Faraz HTTP throttling retries once per delivery while uncertain submission
     enabled: true,
     apiKey: "TEST-only-provider-key",
     clearApiKey: false,
-    fromNumber: "+983000505",
+    fromNumber: "3000505",
+    manual: true,
+    patternConfirmed: true,
   });
   await saveEventTemplate(admin, {
     eventKey: "announcement.emergency",
@@ -1208,16 +1246,19 @@ test("Faraz HTTP throttling retries once per delivery while uncertain submission
   try {
     process.env.NOTIFICATION_SMS_PROVIDER = "";
     globalThis.fetch = async (url, init) => {
-      assert.equal(String(url), "https://edge.ippanel.com/v1/api/send");
+      assert.equal(
+        String(url),
+        "https://api.iranpayamak.com/ws/v1/sms/pattern",
+      );
       const body = JSON.parse(String(init?.body));
-      assert.deepEqual(Object.keys(body.params), ["alert_text"]);
+      assert.deepEqual(Object.keys(body.attributes), ["alert_text"]);
       assert.ok(!JSON.stringify(body).includes("private content"));
       calls++;
       if (unknown) throw new Error("connection lost");
       if (calls === 1) return new Response("", { status: 429 });
       return Response.json({
-        meta: { status: true },
-        data: { message_outbox_ids: [1234567] },
+        status: "success",
+        data: 1234567,
       });
     };
     const row = await createDelivery();

@@ -1,5 +1,6 @@
 import { z } from "zod";
-// Verified against official @farazsms_official/n8n-nodes-farazsms@0.2.0
+// Candidate contract derived from official @farazsms_official/n8n-nodes-farazsms@0.2.0.
+// A live response has NOT been independently verified; reject unknown shapes.
 // GenericFunctions.getLines/extractRows: envelope data[] or data.data[], row.number.
 const envelope = z.object({
   status: z.enum(["success", "error"]),

@@ -212,6 +212,8 @@ export async function processDelivery(
     if (
       [
         "UNCONFIGURED",
+        "SENDER_UNCONFIRMED",
+        "SENDER_UNAVAILABLE",
         "PREFERENCE",
         "INACTIVE",
         "EXPIRED",

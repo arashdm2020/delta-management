@@ -1,5 +1,7 @@
 # FarazSMS event-based refactor
 
+Provider-contract and sender-selection follow-up: see [FarazSMS sender selection](farazsms-sender-selection.md). The current adapter uses the verified IranPayamak pattern contract; any older provider details below describe the earlier snapshot.
+
 The existing authentication, PostgreSQL notification/outbox jobs, preferences, accounting records and provider adapter are preserved. No separate notification queue or application was introduced. No deployment or Phase 4 work was performed.
 
 ## Configuration and UI

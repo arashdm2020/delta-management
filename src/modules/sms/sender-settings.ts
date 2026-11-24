@@ -42,6 +42,9 @@ export async function refreshSenderLines(
       selected === before?.fromNumber &&
       before.senderPatternConfirmed;
     const fields = {
+      updatedAt: new Date(
+        Math.max(Date.now(), (current?.updatedAt.getTime() || 0) + 1),
+      ),
       encryptedApiKey: changed
         ? encryptSmsKey(apiKey)
         : before!.encryptedApiKey,

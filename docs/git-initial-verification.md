@@ -1,5 +1,7 @@
 # Initial Git checkpoint verification — 2026-11-24
 
+Follow-up: the interrupted implementation and failures documented below are addressed in [the sender-selection follow-up](farazsms-sender-selection.md). This document retains the original checkpoint results for history.
+
 Remote: `git@github.com:arashdm2020/delta-management.git` (SSH).
 Branch: `main`.
 

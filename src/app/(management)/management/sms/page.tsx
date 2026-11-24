@@ -31,6 +31,11 @@ export default async function SmsSettings() {
           enabled: settings.enabled,
           hasApiKey: settings.hasApiKey,
           fromNumber: settings.fromNumber,
+          lines: settings.lines,
+          source: settings.source,
+          patternConfirmed: settings.patternConfirmed,
+          revision: settings.revision,
+          checkedAt: settings.checkedAt,
           legacyConfigured: Object.keys(settings.patterns).length > 0,
         }}
         templates={templates.map((row) => ({

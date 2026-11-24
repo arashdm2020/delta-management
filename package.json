@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "tsx --test tests/unit.test.ts",
-    "test:integration": "tsx --test --test-concurrency=1 tests/integration.test.ts tests/finance.test.ts tests/communications.test.ts",
+    "test:integration": "tsx --test --test-concurrency=1 tests/integration.test.ts tests/finance.test.ts tests/communications.test.ts tests/senders.test.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",

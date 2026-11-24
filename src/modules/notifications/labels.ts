@@ -63,6 +63,8 @@ export const labels: Record<string, string> = {
   PATTERN_DISABLED: "پترن رویداد غیرفعال است",
   MAPPING_INVALID: "نگاشت متغیرهای پترن نامعتبر است",
   PAYLOAD_INVALID: "متغیرهای الزامی پیامک کامل نیست",
+  SENDER_UNCONFIRMED: "خط ارسال برای این کلید و مجوز پترن تأیید نشده است",
+  SENDER_UNAVAILABLE: "خط انتخاب‌شده در فهرست تأییدشده موجود نیست",
   UNCONFIGURED: "سرویس پیکربندی نشده",
   PREFERENCE: "طبق ترجیح کاربر ارسال نشد",
   INACTIVE: "عضویت فعال نیست",

@@ -1,4 +1,6 @@
 "use client";
+import { SenderProviderCard } from "./sender-provider-card";
+import type { SenderPublicView } from "./sender-view";
 import Link from "next/link";
 import { useActionState, useRef, useState } from "react";
 import { smsSettingsAction } from "./actions";
@@ -123,24 +125,10 @@ export function SmsSettingsForm({
   templates,
   schedule,
 }: {
-  settings: {
-    enabled: boolean;
-    hasApiKey: boolean;
-    fromNumber: string;
-    legacyConfigured: boolean;
-  };
+  settings: SenderPublicView;
   templates: Template[];
   schedule: Schedule;
 }) {
-  const [state, action, pending] = useActionState(
-    async (previous: typeof initial, form: FormData) => {
-      const result = await smsSettingsAction(previous, form);
-      if (keyInput.current) keyInput.current.value = "";
-      return result;
-    },
-    initial,
-  );
-  const keyInput = useRef<HTMLInputElement>(null);
   const editorRef = useRef<HTMLElement>(null);
   const [scheduleState, scheduleAction, schedulePending] = useActionState(
     smsSettingsAction,
@@ -152,66 +140,7 @@ export function SmsSettingsForm({
   return (
     <div className="space-y-6">
       <div className="grid gap-6 xl:grid-cols-2">
-        <Card>
-          <h2 className="mb-4 font-bold">سرویس‌دهنده و اتصال</h2>
-          <Badge
-            tone={
-              settings.enabled && settings.hasApiKey ? "success" : "warning"
-            }
-          >
-            {settings.enabled && settings.hasApiKey
-              ? "پیکربندی فعال؛ اتصال آزمایش نشده"
-              : "ارسال واقعی غیرفعال یا ناقص"}
-          </Badge>
-          <form
-            action={action}
-            className="mt-5 grid gap-4"
-            aria-label="تنظیمات سرویس‌دهنده"
-          >
-            <input type="hidden" name="operation" value="provider" />
-            <label className="field">
-              کلید API فراز پیامک
-              <Input
-                ref={keyInput}
-                name="apiKey"
-                type="password"
-                autoComplete="new-password"
-                maxLength={1000}
-              />
-            </label>
-            <p className="text-xs text-secondary">
-              {settings.hasApiKey
-                ? "کلید ذخیره شده؛ خالی گذاشتن کادر آن را حفظ می‌کند."
-                : "کلیدی ثبت نشده است."}
-            </p>
-            <label className="flex items-center gap-3 text-sm">
-              <input name="clearApiKey" type="checkbox" />
-              حذف کلید ذخیره‌شده
-            </label>
-            <label className="field">
-              شمارهٔ فرستنده
-              <Input
-                name="fromNumber"
-                dir="ltr"
-                defaultValue={settings.fromNumber}
-                maxLength={20}
-              />
-            </label>
-            <label className="flex items-start gap-3 text-sm leading-7">
-              <input
-                name="enabled"
-                type="checkbox"
-                defaultChecked={settings.enabled}
-                className="mt-2"
-              />
-              فعال‌سازی ارسال واقعی (ممکن است هزینه داشته باشد)
-            </label>
-            <Result state={state} />
-            <Button disabled={pending}>
-              {pending ? "در حال ذخیره…" : "ذخیرهٔ تنظیمات پیامک"}
-            </Button>
-          </form>
-        </Card>
+        <SenderProviderCard settings={settings} />
         <Card>
           <h2 className="mb-4 font-bold">زمان‌بندی یادآوری‌ها</h2>
           <form

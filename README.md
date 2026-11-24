@@ -1,6 +1,6 @@
 # سامانه مدیریت ساختمان دلتا
 
-> Initial Git checkpoint (2026-11-24): the interrupted sender-discovery work is preserved but incomplete. Current validation has four integration failures; see [the checkpoint verification report](docs/git-initial-verification.md). Historical acceptance results below describe earlier snapshots.
+> FarazSMS sender selection follow-up: the interrupted settings/UI integration and four checkpoint test failures are addressed. See [sender selection implementation and validation](docs/farazsms-sender-selection.md). Live provider discovery remains unverified; historical acceptance results below describe earlier snapshots.
 
 Persian-first Next.js modular monolith. Phase 1 identity/unit management plus Phase 2 billing, verified development payments, double-entry accounting and financial transparency, plus Phase 3 communications, private requests, notifications and meeting governance.
 

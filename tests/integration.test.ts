@@ -575,7 +575,9 @@ test("SMS settings are super-admin only, encrypted and redacted; Faraz pattern a
     enabled: true,
     apiKey: "test-only-api-key-never-real",
     clearApiKey: false,
-    fromNumber: "+983000505",
+    fromNumber: "3000505",
+    manual: true,
+    patternConfirmed: true,
     patterns: {
       OTP: { code: "testOtp", variable: "code" },
       general: { code: "testNotice", variable: "message" },
@@ -595,21 +597,18 @@ test("SMS settings are super-admin only, encrypted and redacted; Faraz pattern a
   let sent = 0;
   const mock: typeof fetch = async (url, init) => {
     sent++;
-    assert.equal(String(url), "https://edge.ippanel.com/v1/api/send");
-    assert.equal(
-      new Headers(init?.headers).get("Authorization"),
-      config.apiKey,
-    );
+    assert.equal(String(url), "https://api.iranpayamak.com/ws/v1/sms/pattern");
+    assert.equal(new Headers(init?.headers).get("Api-Key"), config.apiKey);
     assert.deepEqual(JSON.parse(String(init?.body)), {
-      sending_type: "pattern",
-      from_number: config.fromNumber,
+      line_number: config.fromNumber,
+      number_format: "persian",
       code: "testOtp",
-      recipients: ["+989170000001"],
-      params: { code: "654321" },
+      recipient: "09170000001",
+      attributes: { code: "654321" },
     });
     return Response.json({
-      meta: { status: true },
-      data: { message_outbox_ids: [1123594208] },
+      status: "success",
+      data: 1123594208,
     });
   };
   assert.deepEqual(
@@ -638,7 +637,7 @@ test("SMS settings are super-admin only, encrypted and redacted; Faraz pattern a
   );
   await assert.rejects(
     sendFarazPattern("09170000001", "OTP", "654321", async () =>
-      Response.json({ meta: { status: false }, data: null }),
+      Response.json({ status: "error", data: null }),
     ),
     /PROVIDER_REJECTED/,
   );
@@ -668,7 +667,9 @@ test("nine independent SMS event patterns map multiple variables, reject incompl
     enabled: true,
     apiKey: "only-test-not-real",
     clearApiKey: false,
-    fromNumber: "+983000505",
+    fromNumber: "3000505",
+    manual: true,
+    patternConfirmed: true,
   });
   let calls = 0;
   for (const event of smsEventKeys) {
@@ -707,14 +708,14 @@ test("nine independent SMS event patterns map multiple variables, reject incompl
       const sent = JSON.parse(String(init?.body));
       assert.equal(sent.code, "test_" + smsEvents[event].pattern);
       assert.deepEqual(
-        sent.params,
+        sent.attributes,
         Object.fromEntries(
           Object.entries(payload).map(([key, value]) => [mapping[key], value]),
         ),
       );
       return Response.json({
-        meta: { status: true },
-        data: { message_outbox_ids: [9000 + calls] },
+        status: "success",
+        data: 9000 + calls,
       });
     };
     const result = await sendFarazEvent("09170000001", event, payload, mock);

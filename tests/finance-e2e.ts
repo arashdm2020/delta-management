@@ -69,6 +69,7 @@ const server = spawn(
       ...process.env,
       NODE_ENV: "development",
       DELTA_ACCEPTANCE_DIST: "true",
+      NODE_OPTIONS: `${process.env.NODE_OPTIONS || ""} --import=${new URL("./provider-fetch-fixture.mjs", import.meta.url).href}`,
       APP_ORIGIN: origin,
       DEV_SMS: "true",
       DEV_FIXED_OTP_ENABLED: "true",
@@ -183,8 +184,67 @@ try {
   await page.goto(origin + "/management/sms");
   await page
     .getByLabel("کلید API فراز پیامک", { exact: true })
+    .fill("browser-sender-one");
+  await page
+    .getByRole("button", { name: "دریافت / تازه‌سازی خطوط", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "دریافت / تازه‌سازی خطوط", exact: true }),
+  ).toBeDisabled();
+  await expect
+    .poll(() => page.locator('select[name="fromNumber"]').inputValue())
+    .toBe("3000505");
+  await expect(
+    page.locator('input[name="patternConfirmed"]'),
+  ).not.toBeChecked();
+  await page
+    .getByLabel("کلید API فراز پیامک", { exact: true })
+    .fill("browser-sender-many");
+  await page
+    .getByRole("button", { name: "دریافت / تازه‌سازی خطوط", exact: true })
+    .click();
+  await expect(page.locator('select[name="fromNumber"] option')).toHaveCount(3);
+  assert.equal(
+    await page.locator('select[name="fromNumber"]').inputValue(),
+    "",
+  );
+  await page.locator('select[name="fromNumber"]').selectOption("500202");
+  await page.locator('input[name="patternConfirmed"]').check();
+  await page
+    .getByRole("button", { name: "ذخیرهٔ تنظیمات پیامک", exact: true })
+    .click();
+  await expect
+    .poll(
+      async () =>
+        (await db.smsProviderSetting.findUnique({ where: { key: "farazsms" } }))
+          ?.fromNumber,
+    )
+    .toBe("500202");
+  await page
+    .getByLabel("کلید API فراز پیامک", { exact: true })
+    .fill("browser-sender-invalid");
+  await page
+    .getByRole("button", { name: "دریافت / تازه‌سازی خطوط", exact: true })
+    .click();
+    await expect(
+      page
+        .getByRole("form", { name: "تنظیمات سرویس‌دهنده" })
+        .getByRole("alert"),
+    ).toContainText("KEY_INVALID");
+  assert.equal(
+    (
+      await db.smsProviderSetting.findUniqueOrThrow({
+        where: { key: "farazsms" },
+      })
+    ).fromNumber,
+    "500202",
+  );
+  await page
+    .getByLabel("کلید API فراز پیامک", { exact: true })
     .fill("browser-test-key-never-real");
-  await page.locator('input[name="fromNumber"]').fill("+983000505");
+  await page.locator('input[name="manual"]').check();
+  await page.locator('input[name="manualNumber"]').fill("3000505");
+  await page.locator('input[name="patternConfirmed"]').check();
 
   await page
     .getByRole("button", { name: "ذخیرهٔ تنظیمات پیامک", exact: true })

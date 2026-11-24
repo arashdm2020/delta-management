@@ -111,7 +111,7 @@ export async function saveSmsSettings(actor: Actor, input: unknown) {
         "خط انتخاب‌شده برای این کلید تأیید نشده؛ ابتدا دریافت خطوط را بزنید یا روش دستی را صریح انتخاب کنید.",
       );
     if (
-      (data.enabled || data.manual) &&
+      (data.enabled || (data.manual && !data.clearApiKey)) &&
       (!apiKey || !fromNumber || !data.patternConfirmed)
     )
       fail(
@@ -122,6 +122,9 @@ export async function saveSmsSettings(actor: Actor, input: unknown) {
     const source = fromNumber ? (data.manual ? "MANUAL" : "DISCOVERED") : null;
     if (data.clearApiKey) fromNumber = "";
     const fields = {
+      updatedAt: new Date(
+        Math.max(Date.now(), (previous?.updatedAt.getTime() || 0) + 1),
+      ),
       enabled: data.enabled,
       encryptedApiKey,
       fromNumber,
