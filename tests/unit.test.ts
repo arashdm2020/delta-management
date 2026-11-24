@@ -96,6 +96,33 @@ test("fixed OTP requires development and exact opt-in", async () => {
   }
 });
 
+test("temporary production login is single-account, bounded, expiring and challenge-scoped", async () => {
+  const { temporaryLoginWindow, temporaryOtpExpiry } = await import("../src/modules/auth/temporary-login");
+  const original = { ...process.env };
+  const now = new Date("2026-11-24T10:00:00Z");
+  try {
+    Object.assign(process.env, { NODE_ENV: "production", TEMP_LOGIN_ENABLED: "true", TEMP_LOGIN_PHONE: "+989166000001", TEMP_LOGIN_STARTS_AT: "2026-11-24T09:00:00Z", TEMP_LOGIN_EXPIRES_AT: "2026-11-25T09:00:00Z" });
+    assert.ok(temporaryOtpExpiry("+989166000001", "1234", now, now));
+    assert.equal(temporaryOtpExpiry("+989166000002", "1234", now, now), null);
+    assert.equal(temporaryOtpExpiry("+989166000001", "9999", now, now), null);
+    assert.equal(temporaryOtpExpiry("+989166000001", "1234", new Date("2026-11-24T08:59:59Z"), now), null);
+    assert.equal(temporaryLoginWindow("+989166000001", new Date("2026-11-25T09:00:00Z")), null);
+    assert.equal(temporaryLoginWindow("+989166000001", new Date("2026-11-24T08:59:59Z")), null);
+    for (const invalid of ["invalid", "2026-11-25T09:00:01Z"]) {
+      process.env.TEMP_LOGIN_EXPIRES_AT = invalid;
+      assert.equal(temporaryLoginWindow("+989166000001", now), null);
+    }
+    process.env.TEMP_LOGIN_EXPIRES_AT = "2026-11-25T09:00:00Z";
+    for (const environment of ["test", "development", ""]) {
+      Object.assign(process.env, { NODE_ENV: environment });
+      assert.equal(temporaryLoginWindow("+989166000001", now), null);
+    }
+    Object.assign(process.env, { NODE_ENV: "production" });
+    process.env.TEMP_LOGIN_ENABLED = "false";
+    assert.equal(temporaryLoginWindow("+989166000001", now), null);
+  } finally { process.env = original; }
+});
+
 test("Jalali billing uses exact Tehran midnight and leap months", async () => {
   const { periodBounds } = await import("../src/modules/billing/calendar");
   assert.equal(

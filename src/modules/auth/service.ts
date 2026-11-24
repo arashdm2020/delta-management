@@ -1,4 +1,5 @@
 import { acceptsDevelopmentOtp } from "./development-otp";
+import { temporaryLoginWindow, temporaryOtpExpiry } from "./temporary-login";
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
 import { audit } from "@/modules/audit/service";
@@ -22,6 +23,7 @@ export async function requestOtp(
   const code = randomOtp();
   const id = randomUUID();
   const now = new Date();
+  const temporaryWindow = temporaryLoginWindow(phone, now);
   await db.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${phone}))`;
     for (const [key, limit] of [
@@ -62,12 +64,12 @@ export async function requestOtp(
       "auth.otp.request",
       null,
       undefined,
-      { phoneHash: hashToken(phone) },
+      { phoneHash: hashToken(phone), temporary: Boolean(temporaryWindow) },
       tx,
     );
   });
   try {
-    await send(phone, code);
+    if (!temporaryWindow) await send(phone, code);
   } catch {
     await db.oTPChallenge.update({
       where: { id },
@@ -95,7 +97,8 @@ export async function verifyOtp(id: string, code: string, origin: string) {
       where: { id },
       data: { attempts: { increment: 1 } },
     });
-    if (!acceptsDevelopmentOtp(code) && !equalHash(challenge.codeHash, otpHash(id, code))) {
+    const temporaryExpiry = temporaryOtpExpiry(challenge.phone, code, challenge.createdAt);
+    if (!temporaryExpiry && !acceptsDevelopmentOtp(code) && !equalHash(challenge.codeHash, otpHash(id, code))) {
       await audit("auth.otp.failed", null, id, {}, tx);
       return null;
     }
@@ -110,11 +113,11 @@ export async function verifyOtp(id: string, code: string, origin: string) {
     });
     if (user.status === "SUSPENDED") return null;
     const token = randomToken();
-    const expiresAt = new Date(Date.now() + 7 * 86400000);
+    const expiresAt = temporaryExpiry || new Date(Date.now() + 7 * 86400000);
     await tx.session.create({
       data: { userId: user.id, tokenHash: hashToken(token), expiresAt },
     });
-    await audit("auth.login", user.id, user.id, {}, tx);
+    await audit("auth.login", user.id, user.id, { temporary: Boolean(temporaryExpiry) }, tx);
     return { token, expiresAt, user };
   });
   if (!result) throw new DomainError("OTP", "کد نامعتبر یا منقضی است.");

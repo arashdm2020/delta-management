@@ -16,6 +16,41 @@ let admin: Awaited<ReturnType<typeof db.user.create>> & {
 };
 let resident: typeof admin;
 let tenant: typeof admin;
+test("temporary production OTP skips SMS only for the authorized account and preserves security gates", async () => {
+  const original = { ...process.env };
+  const start = new Date(Date.now() - 120000);
+  const expiry = new Date(Date.now() + 3600000);
+  const phone = "+989166000001";
+  let sent = 0;
+  const send = async () => { sent++; };
+  try {
+    Object.assign(process.env, { NODE_ENV: "production", DEV_FIXED_OTP_ENABLED: "true", TEMP_LOGIN_ENABLED: "true", TEMP_LOGIN_PHONE: phone, TEMP_LOGIN_STARTS_AT: start.toISOString(), TEMP_LOGIN_EXPIRES_AT: expiry.toISOString() });
+    const challenge = await requestOtp(phone, "temporary-test", send);
+    assert.equal(sent, 0);
+    assert.deepEqual(Object.keys(challenge), ["challengeId"]);
+    await assert.rejects(requestOtp(phone, "temporary-test", send));
+    await assert.rejects(verifyOtp(challenge.challengeId, "9999", "temporary-test"));
+    const result = await verifyOtp(challenge.challengeId, "1234", "temporary-test");
+    assert.equal(result.user.status, "PENDING");
+    assert.equal(result.expiresAt.toISOString(), expiry.toISOString());
+    assert.equal(await db.userRole.count({ where: { userId: result.user.id } }), 0);
+    await assert.rejects(verifyOtp(challenge.challengeId, "1234", "temporary-test"));
+    const other = await requestOtp("+989166000002", "temporary-test", send);
+    assert.equal(sent, 1);
+    await assert.rejects(verifyOtp(other.challengeId, "1234", "temporary-test"));
+    for (let index = 3; index <= 6; index++) {
+      const target = "+98916600000" + index;
+      process.env.TEMP_LOGIN_PHONE = target;
+      const pending = await requestOtp(target, "temporary-test", send);
+      if (index === 3) await db.oTPChallenge.update({ where: { id: pending.challengeId }, data: { createdAt: new Date(start.getTime() - 1) } });
+      if (index === 4) await db.oTPChallenge.update({ where: { id: pending.challengeId }, data: { attempts: 5 } });
+      if (index === 5) await db.oTPChallenge.update({ where: { id: pending.challengeId }, data: { expiresAt: new Date(Date.now() - 1) } });
+      if (index === 6) process.env.TEMP_LOGIN_EXPIRES_AT = new Date(Date.now() - 1).toISOString();
+      await assert.rejects(verifyOtp(pending.challengeId, "1234", "temporary-test"));
+    }
+    assert.equal(sent, 1);
+  } finally { process.env = original; }
+});
 let unit: Awaited<ReturnType<typeof db.unit.create>>;
 before(async () => {
   execFileSync(
