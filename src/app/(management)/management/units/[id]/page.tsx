@@ -30,6 +30,10 @@ export default async function Detail({
     orderBy: { name: "asc" },
   });
   const active = unit.memberships.filter((m) => !m.endsAt);
+  const memberAccounts = await db.user.findMany({
+    where: { id: { in: unit.memberships.map((m) => m.userId) } },
+    select: { id: true, phone: true, status: true },
+  });
   const contacts = [
     ...savedContacts.map((c) => ({
       kind: c.kind,
@@ -50,11 +54,12 @@ export default async function Detail({
     <div className="min-w-0 space-y-6 break-words [&_select]:min-w-0 [&_select]:max-w-full [&_select]:w-full [&_form]:min-w-0 [&_label]:min-w-0">
       <h2 className="text-xl font-bold">واحد {unit.number}</h2>
       <Card>
-        <h3 className="mb-3 font-bold">ثبت مالک و مستأجر پیش از اولین ورود</h3>
+        <h3 className="mb-3 font-bold">تماس اصلی مالک و مستأجر</h3>
         <p className="mb-5 text-sm leading-7 text-secondary">
           اطلاعات هر دو نفر مستقل است. برای واحد فعالِ غیرخالی، شمارهٔ مستأجر در
-          اولویت تماس است؛ اگر موجود نباشد شمارهٔ مالک انتخاب می‌شود. این اولویت،
-          مسئول پرداخت را عوض نمی‌کند.
+          اولویت تماس است؛ اگر موجود نباشد شمارهٔ مالک انتخاب می‌شود. این
+          اولویت، مسئول پرداخت را عوض نمی‌کند. تغییر تماس اصلی، ارتباط سایر
+          ساکنان را پایان نمی‌دهد؛ پایان سکونت باید جداگانه ثبت شود.
         </p>
         <p className="mb-5 text-sm">
           تماس اصلی:{" "}
@@ -74,6 +79,60 @@ export default async function Detail({
             contact={contacts.find((c) => c.kind === "TENANT")}
           />
         </div>
+      </Card>
+      <Card>
+        <h3 className="mb-3 font-bold">افزودن ساکن مستقل</h3>
+        <p className="mb-4 text-sm text-secondary">
+          هر شخص با شمارهٔ خودش وارد می‌شود. افزودن شخص دوم، ساکن قبلی یا مسئول
+          پرداخت را جایگزین نمی‌کند.
+        </p>
+        <ActionForm label="افزودن ساکن" className="sm:grid-cols-2">
+          <input name="operation" value="unit-resident" type="hidden" />
+          <input name="unitId" value={unit.id} type="hidden" />
+          <label className="field">
+            نام و نام خانوادگی
+            <Input name="name" minLength={3} maxLength={100} required />
+          </label>
+          <label className="field">
+            شماره همراه مستقل
+            <Input name="phone" type="tel" dir="ltr" required maxLength={40} />
+          </label>
+          <label className="field">
+            نوع سکونت فرد جدید
+            <select name="kind">
+              <option value="TENANT">مستأجر</option>
+              <option value="OWNER">مالک</option>
+            </select>
+          </label>
+          <label className="flex min-h-11 items-center gap-2">
+            <input name="approveAccess" type="checkbox" defaultChecked />
+            فعال‌سازی دسترسی حساب
+          </label>
+          <label className="flex min-h-11 items-center gap-2">
+            <input name="primary" type="checkbox" />
+            انتخاب به‌عنوان تماس اصلی این نوع
+          </label>
+        </ActionForm>
+      </Card>
+      <Card>
+        <h3 className="mb-3 font-bold">جایگاه فیزیکی در طبقه</h3>
+        <p className="mb-4 text-sm text-secondary">
+          شمارهٔ واحد ترتیب واقعی همسایگی را تعیین نمی‌کند. جایگاه‌ها از راست به
+          چپ هستند. برای تغییر واحد ادغام‌شده، ابتدا گروه فیزیکی را پایان دهید.
+        </p>
+        <ActionForm label="ذخیرهٔ جایگاه">
+          <input name="operation" value="layout-position" type="hidden" />
+          <input name="unitId" value={unit.id} type="hidden" />
+          <label className="field">
+            جایگاه در ردیف
+            <select name="position" defaultValue={unit.physicalPosition || ""}>
+              <option value="">خودکار بر اساس شماره</option>
+              <option value="1">۱ · راست</option>
+              <option value="2">۲ · میانی</option>
+              <option value="3">۳ · چپ</option>
+            </select>
+          </label>
+        </ActionForm>
       </Card>
       <Card>
         <h3 className="mb-5 font-bold">اطلاعات واحد</h3>
@@ -152,6 +211,9 @@ export default async function Detail({
                   : m.kind === "TENANT"
                     ? "مستأجر"
                     : "نمایندهٔ مجاز"}
+              </p>
+              <p className="text-xs text-secondary" dir="ltr">
+                {memberAccounts.find((u) => u.id === m.userId)?.phone}
               </p>
               <p className="mb-3 text-xs text-secondary">
                 {jalaliTime(m.startsAt)} تا{" "}

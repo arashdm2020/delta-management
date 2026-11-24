@@ -34,7 +34,17 @@ export default async function Units({
     orderBy: { number: "asc" },
     include: {
       contacts: { select: { kind: true, name: true } },
-      _count: { select: { memberships: { where: { endsAt: null } } } },
+      memberships: {
+        where: { endsAt: null, startsAt: { lte: new Date() } },
+        select: { kind: true, user: { select: { name: true } } },
+      },
+      _count: {
+        select: {
+          memberships: {
+            where: { endsAt: null, startsAt: { lte: new Date() } },
+          },
+        },
+      },
     },
   });
   return (
@@ -77,12 +87,18 @@ export default async function Units({
                     واحد {u.number}
                   </Link>
                   <p className="mt-2 text-sm text-secondary">
-                    {u.contacts
-                      .map(
-                        (c) =>
-                          `${c.kind === "OWNER" ? "مالک" : "مستأجر"}: ${c.name}`,
-                      )
-                      .join(" · ") || "اطلاعات مالک و مستأجر هنوز ثبت نشده است"}
+                    {[
+                      ...new Set([
+                        ...u.contacts.map(
+                          (c) =>
+                            `${c.kind === "OWNER" ? "مالک" : "مستأجر"}: ${c.name}`,
+                        ),
+                        ...u.memberships.map(
+                          (m) =>
+                            `${m.kind === "OWNER" ? "مالک" : m.kind === "TENANT" ? "مستأجر" : "نماینده"}: ${m.user.name || "نام ثبت نشده"}`,
+                        ),
+                      ]),
+                    ].join(" · ") || "اطلاعات مالک و مستأجر هنوز ثبت نشده است"}
                   </p>
                   <p className="text-sm text-secondary">
                     طبقه {u.floor} ·{" "}

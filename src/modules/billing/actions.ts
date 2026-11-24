@@ -180,6 +180,7 @@ export async function financeAction(
     "/payments",
     "/reports",
     "/home",
+    "/management",
     "/management/finance",
     "/management/expenses",
   ])

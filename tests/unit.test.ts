@@ -1,5 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { arrangeUnits, floorKey } from "../src/modules/building-layout/layout";
+test("floor inference and configurable physical order never invent missing units", () => {
+  assert.equal(floorKey({ number: "۳۲", floor: "نامشخص" }), "3");
+  assert.equal(floorKey({ number: "32", floor: "همکف" }), "همکف");
+  assert.equal(floorKey({number:"999999999999999999999999999999",floor:"-"}),"99999999999999999999999999999");
+  const units = [45, 21, 32, 43, 22, 44].map(number => ({ id: String(number), number: String(number), floor: "نامشخص", physicalPosition: null as number | null }));
+  const floors = arrangeUnits(units);
+  assert.deepEqual(floors.map(f => f.floor), ["2", "3", "4"]);
+  assert.deepEqual(floors[2].units.map(p => [p.unit.number, p.position]), [["43", 1], ["44", 2], ["45", 3]]);
+  assert.deepEqual(arrangeUnits([...units].reverse()), floors);
+  assert.equal(floors.flatMap(f => f.units).length, units.length);
+  const positioned = arrangeUnits([{ ...units[1], physicalPosition: 3 }, units[4]])[0].units;
+  assert.deepEqual(positioned.map(p => [p.unit.number, p.position]), [["22", 1], ["21", 3]]);
+});
 import { SmsProviderError, smsFailureDiagnostic } from "../src/modules/sms/errors";
 test("SMS diagnostics retain safe codes and HTTP status without copying arbitrary messages", () => {
   assert.deepEqual(smsFailureDiagnostic(new SmsProviderError("PROVIDER_REJECTED", 403, "http")), { reason: "PROVIDER_REJECTED", httpStatus: 403, stage: "http" });

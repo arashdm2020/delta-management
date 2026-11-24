@@ -22,7 +22,16 @@ import {
 import { approveUser } from "@/modules/users/service";
 import { saveBuilding } from "@/modules/building/service";
 import { assignBoard, endBoard } from "@/modules/board/service";
-import { saveUnitContact } from "@/modules/units/contacts";
+import {
+  saveUnitContact,
+  registerUnitResident,
+} from "@/modules/units/contacts";
+import {
+  createPhysicalGroup,
+  endPhysicalGroup,
+  setUnitPosition,
+  assignPhysicalGroupPayer,
+} from "@/modules/building-layout/service";
 import { audit } from "@/modules/audit/service";
 export type ActionResult = { ok: boolean; message: string };
 export async function manageAction(
@@ -36,6 +45,11 @@ export async function manageAction(
       .enum([
         "unit",
         "unit-contact",
+        "unit-resident",
+        "layout-position",
+        "physical-group",
+        "physical-group-end",
+        "physical-group-payer",
         "approval",
         "membership",
         "membership-end",
@@ -47,6 +61,38 @@ export async function manageAction(
       .parse(form.get("operation"));
     const value = (key: string) => String(form.get(key) || "");
     switch (operation) {
+      case "unit-resident":
+        await registerUnitResident(actor, {
+          unitId: value("unitId"),
+          kind: value("kind"),
+          name: value("name"),
+          phone: value("phone"),
+          primary: form.has("primary"),
+          approveAccess: form.has("approveAccess"),
+        });
+        break;
+      case "layout-position":
+        await setUnitPosition(actor, {
+          unitId: value("unitId"),
+          position: value("position") ? Number(value("position")) : null,
+        });
+        break;
+      case "physical-group":
+        await createPhysicalGroup(actor, {
+          unitIds: form.getAll("unitIds"),
+          occupantLabel: value("occupantLabel"),
+        });
+        break;
+      case "physical-group-end":
+        await endPhysicalGroup(actor, value("id"));
+        break;
+      case "physical-group-payer":
+        await assignPhysicalGroupPayer(
+          actor,
+          value("groupId"),
+          value("userId"),
+        );
+        break;
       case "unit-contact":
         await saveUnitContact(actor, {
           unitId: value("unitId"),

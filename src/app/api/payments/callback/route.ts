@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { mockEnabled } from "@/modules/payments/providers";
 import { verifyPayment } from "@/modules/payments/service";
+import { revalidatePath } from "next/cache";
 export async function GET(request: Request) {
   if (!mockEnabled())
     return NextResponse.json(
@@ -15,6 +16,7 @@ export async function GET(request: Request) {
       .max(200)
       .parse(new URL(request.url).searchParams.get("authority"));
     const payment = await verifyPayment(authority);
+    for (const path of ["/home", "/management", "/charges", "/reports"]) revalidatePath(path, "layout");
     return NextResponse.redirect(
       new URL("/payments/receipt/" + payment.id, process.env.APP_ORIGIN),
       303,

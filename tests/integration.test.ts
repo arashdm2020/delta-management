@@ -102,7 +102,7 @@ test("temporary production OTP skips SMS only for the authorized account and pre
       const pending = await requestOtp(target, "temporary-test", send);
       if (index === 3) await db.oTPChallenge.update({ where: { id: pending.challengeId }, data: { createdAt: new Date(start.getTime() - 1) } });
       if (index === 4) await db.oTPChallenge.update({ where: { id: pending.challengeId }, data: { attempts: 5 } });
-      if (index === 5) await db.oTPChallenge.update({ where: { id: pending.challengeId }, data: { expiresAt: new Date(Date.now() - 1) } });
+      if (index === 5) await db.oTPChallenge.update({ where: { id: pending.challengeId }, data: { createdAt: new Date(Date.now() - 60000), expiresAt: new Date(Date.now() - 1000) } });
       if (index === 6) process.env.TEMP_LOGIN_EXPIRES_AT = new Date(Date.now() - 1).toISOString();
       await assert.rejects(verifyOtp(pending.challengeId, "1234", "temporary-test"));
     }
@@ -647,8 +647,12 @@ test("management preregisters optional owner/tenant contacts without requiring l
     await db.unitMembership.count({
       where: { userId: tenantContact.userId!, unitId: unit.id, endsAt: null },
     }),
-    0,
+    1,
   );
+  // Selecting a different primary contact preserves the other resident. Only
+  // the explicit end-membership action may close their residence/history.
+  const previousTenant = await db.unitMembership.findFirstOrThrow({ where: { userId: tenantContact.userId!, unitId: unit.id, endsAt: null } });
+  await endMember(admin, previousTenant.id);
   assert.ok(
     await db.unitMembership.count({
       where: {

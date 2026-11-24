@@ -105,19 +105,22 @@ model UserRole {
 }
 
 model Building {
-  id         String      @id @default(uuid()) @db.Uuid
-  key        String      @unique @default("delta")
-  name       String      @default("ساختمان دلتا") @db.VarChar(100)
-  city       String      @default("اردبیل") @db.VarChar(100)
-  address    String?     @db.VarChar(500)
-  capacity   Int         @default(18)
-  units      Unit[]
-  boardTerms BoardTerm[]
-  createdAt  DateTime    @default(now()) @db.Timestamptz(3)
-  updatedAt  DateTime    @updatedAt @db.Timestamptz(3)
+  physicalGroups PhysicalUnitGroup[]
+  id             String              @id @default(uuid()) @db.Uuid
+  key            String              @unique @default("delta")
+  name           String              @default("ساختمان دلتا") @db.VarChar(100)
+  city           String              @default("اردبیل") @db.VarChar(100)
+  address        String?             @db.VarChar(500)
+  capacity       Int                 @default(18)
+  units          Unit[]
+  boardTerms     BoardTerm[]
+  createdAt      DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime            @updatedAt @db.Timestamptz(3)
 }
 
 model Unit {
+  physicalPosition Int?
+  physicalGroups   PhysicalGroupMember[]
   id               String                  @id @default(uuid()) @db.Uuid
   buildingId       String                  @db.Uuid
   building         Building                @relation(fields: [buildingId], references: [id], onDelete: Restrict)
@@ -132,7 +135,43 @@ model Unit {
   updatedAt        DateTime                @updatedAt @db.Timestamptz(3)
 
   @@unique([buildingId, number])
+  @@unique([id, buildingId])
   @@index([active, number])
+}
+
+// Physical layout never replaces the independently chargeable Unit identities.
+model PhysicalUnitGroup {
+  id            String                @id @default(uuid()) @db.Uuid
+  buildingId    String                @db.Uuid
+  building      Building              @relation(fields: [buildingId], references: [id], onDelete: Restrict)
+  floor         String                @db.VarChar(30)
+  label         String                @db.VarChar(100)
+  occupantLabel String?               @db.VarChar(100)
+  startsAt      DateTime              @default(now()) @db.Timestamptz(3)
+  endsAt        DateTime?             @db.Timestamptz(3)
+  createdAt     DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime              @updatedAt @db.Timestamptz(3)
+  members       PhysicalGroupMember[]
+
+  @@unique([id, buildingId])
+  @@index([buildingId, endsAt])
+}
+
+model PhysicalGroupMember {
+  id         String            @id @default(uuid()) @db.Uuid
+  groupId    String            @db.Uuid
+  unitId     String            @db.Uuid
+  buildingId String            @db.Uuid
+  group      PhysicalUnitGroup @relation(fields: [groupId, buildingId], references: [id, buildingId], onDelete: Restrict)
+  unit       Unit              @relation(fields: [unitId, buildingId], references: [id, buildingId], onDelete: Restrict)
+  unitNumber String            @db.VarChar(30)
+  startsAt   DateTime          @default(now()) @db.Timestamptz(3)
+  endsAt     DateTime?         @db.Timestamptz(3)
+  createdAt  DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime          @updatedAt @db.Timestamptz(3)
+
+  @@unique([groupId, unitId])
+  @@index([unitId, endsAt])
 }
 
 model UnitMembership {

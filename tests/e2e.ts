@@ -120,7 +120,7 @@ try {
   });
   await page.goto(origin + "/home");
   await page
-    .getByRole("heading", { name: "سلام، مدیر آزمایشی دلتا" })
+    .getByRole("heading", { name: "نمای کلی ساختمان", exact: true })
     .waitFor();
   assert.equal(await page.locator(".bottom-nav").isVisible(), true);
   assert.equal(

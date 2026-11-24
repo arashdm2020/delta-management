@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { audit } from "@/modules/audit/service";
 import { canManage, type Actor, fail } from "@/lib/security/core";
 import { membershipSchema, unitSchema, uuid } from "@/lib/validation";
+import type { Prisma } from "@prisma/client";
 function authorize(actor: Actor) {
   if (!canManage(actor)) fail("دسترسی مدیریت لازم است.");
 }
@@ -13,6 +14,22 @@ export async function saveUnit(actor: Actor, input: unknown) {
       where: { key: "delta" },
     });
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${building.id}))`;
+    const previous = data.id
+      ? await tx.unit.findUniqueOrThrow({
+          where: { id: data.id, buildingId: building.id },
+        })
+      : null;
+    if (previous) {
+      if (
+        (previous.number !== data.number || previous.floor !== data.floor) &&
+        (await tx.physicalGroupMember.count({
+          where: { unitId: data.id, endsAt: null },
+        }))
+      )
+        fail(
+          "ابتدا گروه فیزیکی واحد را پایان دهید، سپس شماره یا طبقه را تغییر دهید.",
+        );
+    }
     if (
       !data.id &&
       (await tx.unit.count({ where: { buildingId: building.id } })) >=
@@ -30,7 +47,28 @@ export async function saveUnit(actor: Actor, input: unknown) {
           },
         })
       : await tx.unit.create({ data: { ...data, buildingId: building.id } });
-    await audit("unit.save", actor.id, unit.id, {}, tx);
+    await audit(
+      "unit.save",
+      actor.id,
+      unit.id,
+      {
+        before: previous
+          ? {
+              number: previous.number,
+              floor: previous.floor,
+              occupancy: previous.occupancy,
+              active: previous.active,
+            }
+          : null,
+        after: {
+          number: unit.number,
+          floor: unit.floor,
+          occupancy: unit.occupancy,
+          active: unit.active,
+        },
+      },
+      tx,
+    );
     return unit;
   });
 }
@@ -103,24 +141,44 @@ export async function assignBilling(
   uuid.parse(unitId);
   uuid.parse(membershipId);
   return db.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${unitId}))`;
-    const member = await tx.unitMembership.findFirstOrThrow({
-      where: { id: membershipId, unitId, endsAt: null },
-      include: { user: true, unit: true },
-    });
-    if (member.user.status !== "APPROVED" || !member.unit.active)
-      fail("مسئول باید کاربر تأییدشدهٔ یک واحد فعال باشد.");
-    const now = new Date();
-    await tx.billingResponsibility.updateMany({
-      where: { unitId, endsAt: null },
-      data: { endsAt: now },
-    });
-    const assignment = await tx.billingResponsibility.create({
-      data: { unitId, membershipId, userId: member.userId, startsAt: now },
-    });
-    await audit("billing.assign", actor.id, assignment.id, {}, tx);
-    return assignment;
+    return assignBillingIn(tx, actor, unitId, membershipId);
   });
+}
+export async function assignBillingIn(
+  tx: Prisma.TransactionClient,
+  actor: Actor,
+  unitId: string,
+  membershipId: string,
+) {
+  authorize(actor);
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${unitId}))`;
+  const member = await tx.unitMembership.findFirstOrThrow({
+    where: {
+      id: membershipId,
+      unitId,
+      endsAt: null,
+      startsAt: { lte: new Date() },
+    },
+    include: { user: true, unit: true },
+  });
+  if (member.user.status !== "APPROVED" || !member.unit.active)
+    fail("مسئول باید کاربر تأییدشدهٔ یک واحد فعال باشد.");
+  const current = await tx.billingResponsibility.findFirst({
+    where: { unitId, endsAt: null },
+  });
+  if (current?.membershipId === member.id) return current;
+  const now = new Date(
+    Math.max(Date.now(), (current?.startsAt.getTime() || 0) + 1),
+  );
+  await tx.billingResponsibility.updateMany({
+    where: { unitId, endsAt: null },
+    data: { endsAt: now },
+  });
+  const assignment = await tx.billingResponsibility.create({
+    data: { unitId, membershipId, userId: member.userId, startsAt: now },
+  });
+  await audit("billing.assign", actor.id, assignment.id, {}, tx);
+  return assignment;
 }
 export async function visibleUnit(actor: Actor, id: string) {
   uuid.parse(id);
