@@ -1,0 +1,783 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RoleName {
+  SUPER_ADMIN
+  BOARD_MEMBER
+  OWNER
+  TENANT
+}
+
+enum UserStatus {
+  PENDING
+  APPROVED
+  SUSPENDED
+}
+
+enum MembershipKind {
+  OWNER
+  TENANT
+  AUTHORIZED
+}
+
+enum Occupancy {
+  UNKNOWN
+  VACANT
+  OCCUPIED
+}
+
+model User {
+  id               String                  @id @default(uuid()) @db.Uuid
+  phone            String                  @unique @db.VarChar(13)
+  name             String?                 @db.VarChar(100)
+  status           UserStatus              @default(PENDING)
+  approvedAt       DateTime?               @db.Timestamptz(3)
+  createdAt        DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime                @updatedAt @db.Timestamptz(3)
+  sessions         Session[]
+  roles            UserRole[]
+  memberships      UnitMembership[]
+  responsibilities BillingResponsibility[]
+  boardMemberships BoardMember[]
+  audits           AuditLog[]
+
+  @@index([status, createdAt])
+}
+
+model Session {
+  id        String    @id @default(uuid()) @db.Uuid
+  tokenHash String    @unique @db.Char(64)
+  userId    String    @db.Uuid
+  user      User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  expiresAt DateTime  @db.Timestamptz(3)
+  revokedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@index([userId, expiresAt])
+}
+
+model OTPChallenge {
+  id         String    @id @default(uuid()) @db.Uuid
+  phone      String    @db.VarChar(13)
+  codeHash   String    @db.Char(64)
+  attempts   Int       @default(0)
+  expiresAt  DateTime  @db.Timestamptz(3)
+  consumedAt DateTime? @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@index([phone, createdAt])
+}
+
+model SecurityRateLimit {
+  id        String   @id @default(uuid()) @db.Uuid
+  key       String   @unique
+  count     Int      @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+}
+
+model Role {
+  id        String     @id @default(uuid()) @db.Uuid
+  name      RoleName   @unique
+  users     UserRole[]
+  createdAt DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime   @updatedAt @db.Timestamptz(3)
+}
+
+model UserRole {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  roleId    String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([userId, roleId])
+}
+
+model Building {
+  id         String      @id @default(uuid()) @db.Uuid
+  key        String      @unique @default("delta")
+  name       String      @default("ساختمان دلتا") @db.VarChar(100)
+  city       String      @default("اردبیل") @db.VarChar(100)
+  address    String?     @db.VarChar(500)
+  capacity   Int         @default(18)
+  units      Unit[]
+  boardTerms BoardTerm[]
+  createdAt  DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime    @updatedAt @db.Timestamptz(3)
+}
+
+model Unit {
+  id               String                  @id @default(uuid()) @db.Uuid
+  buildingId       String                  @db.Uuid
+  building         Building                @relation(fields: [buildingId], references: [id], onDelete: Restrict)
+  number           String                  @db.VarChar(30)
+  floor            String                  @db.VarChar(30)
+  active           Boolean                 @default(true)
+  occupancy        Occupancy               @default(UNKNOWN)
+  memberships      UnitMembership[]
+  contacts         UnitContact[]
+  responsibilities BillingResponsibility[]
+  createdAt        DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime                @updatedAt @db.Timestamptz(3)
+
+  @@unique([buildingId, number])
+  @@index([active, number])
+}
+
+model UnitMembership {
+  id               String                  @id @default(uuid()) @db.Uuid
+  unitId           String                  @db.Uuid
+  userId           String                  @db.Uuid
+  unit             Unit                    @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  user             User                    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  kind             MembershipKind
+  startsAt         DateTime                @default(now()) @db.Timestamptz(3)
+  endsAt           DateTime?               @db.Timestamptz(3)
+  responsibilities BillingResponsibility[]
+  createdAt        DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime                @updatedAt @db.Timestamptz(3)
+
+  @@unique([id, unitId, userId])
+  @@index([userId, endsAt])
+  @@index([unitId, endsAt])
+}
+
+model BillingResponsibility {
+  id           String         @id @default(uuid()) @db.Uuid
+  unitId       String         @db.Uuid
+  userId       String         @db.Uuid
+  membershipId String         @db.Uuid
+  unit         Unit           @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  user         User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  membership   UnitMembership @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  startsAt     DateTime       @default(now()) @db.Timestamptz(3)
+  endsAt       DateTime?      @db.Timestamptz(3)
+  createdAt    DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime       @updatedAt @db.Timestamptz(3)
+
+  @@index([unitId, startsAt])
+}
+
+model BoardTerm {
+  id         String        @id @default(uuid()) @db.Uuid
+  buildingId String        @db.Uuid
+  building   Building      @relation(fields: [buildingId], references: [id], onDelete: Restrict)
+  title      String        @db.VarChar(100)
+  startsAt   DateTime      @db.Timestamptz(3)
+  endsAt     DateTime?     @db.Timestamptz(3)
+  members    BoardMember[]
+  createdAt  DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime      @updatedAt @db.Timestamptz(3)
+}
+
+model BoardMember {
+  id        String    @id @default(uuid()) @db.Uuid
+  termId    String    @db.Uuid
+  userId    String    @db.Uuid
+  term      BoardTerm @relation(fields: [termId], references: [id], onDelete: Restrict)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  startsAt  DateTime  @default(now()) @db.Timestamptz(3)
+  endsAt    DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@index([userId, endsAt])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  actorId   String?  @db.Uuid
+  actor     User?    @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  action    String   @db.VarChar(100)
+  targetId  String?  @db.Uuid
+  details   Json     @default("{}")
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([createdAt, id])
+  @@index([actorId, createdAt])
+}
+
+// Phase 2: amounts are integer Iranian Rial. SQL migration owns cross-row invariants.
+model ChargePolicy {
+  id             String    @id @default(uuid()) @db.Uuid
+  amount         BigInt
+  previousAmount BigInt?
+  startsAt       DateTime  @unique @db.Timestamptz(3)
+  endsAt         DateTime? @db.Timestamptz(3)
+  reason         String    @db.VarChar(500)
+  actorId        String    @db.Uuid
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+}
+
+model BillingPeriod {
+  id        String   @id @default(uuid()) @db.Uuid
+  key       String   @unique @db.VarChar(7)
+  startsAt  DateTime @unique @db.Timestamptz(3)
+  endsAt    DateTime @db.Timestamptz(3)
+  dueAt     DateTime @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+}
+
+model Invoice {
+  id                 String              @id @default(uuid()) @db.Uuid
+  unitId             String              @db.Uuid
+  periodId           String              @db.Uuid
+  policyId           String              @db.Uuid
+  responsibilityId   String              @db.Uuid
+  responsibleId      String              @db.Uuid
+  responsibleName    String              @db.VarChar(100)
+  unitNumber         String              @db.VarChar(30)
+  amount             BigInt
+  status             String              @default("ISSUED") @db.VarChar(20)
+  issuedAt           DateTime            @default(now()) @db.Timestamptz(3)
+  cancelledAt        DateTime?           @db.Timestamptz(3)
+  cancellationReason String?             @db.VarChar(500)
+  actorId            String              @db.Uuid
+  items              InvoiceItem[]
+  intents            PaymentIntent[]
+  allocations        PaymentAllocation[]
+  corrections        InvoiceCorrection[]
+
+  @@unique([unitId, periodId])
+  @@index([responsibleId, issuedAt])
+}
+
+model InvoiceItem {
+  id          String  @id @default(uuid()) @db.Uuid
+  invoiceId   String  @db.Uuid
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  description String  @db.VarChar(300)
+  amount      BigInt
+}
+
+model PaymentIntent {
+  id                    String              @id @default(uuid()) @db.Uuid
+  invoiceId             String              @db.Uuid
+  invoice               Invoice             @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  actorId               String              @db.Uuid
+  provider              String              @db.VarChar(30)
+  authority             String?             @unique @db.VarChar(200)
+  providerTransactionId String?             @db.VarChar(200)
+  amount                BigInt
+  status                String              @default("CREATING") @db.VarChar(20)
+  createdAt             DateTime            @default(now()) @db.Timestamptz(3)
+  verifiedAt            DateTime?           @db.Timestamptz(3)
+  allocations           PaymentAllocation[]
+
+  @@unique([provider, providerTransactionId])
+  @@index([invoiceId, status])
+}
+
+model PaymentAllocation {
+  id        String        @id @default(uuid()) @db.Uuid
+  intentId  String        @unique @db.Uuid
+  intent    PaymentIntent @relation(fields: [intentId], references: [id], onDelete: Restrict)
+  invoiceId String        @db.Uuid
+  invoice   Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  amount    BigInt
+  createdAt DateTime      @default(now()) @db.Timestamptz(3)
+
+  @@index([invoiceId])
+}
+
+model MockPayment {
+  id            String    @id @default(uuid()) @db.Uuid
+  intentId      String    @unique @db.Uuid
+  authority     String    @unique @db.VarChar(200)
+  amount        BigInt
+  outcome       String    @default("WAITING") @db.VarChar(30)
+  availableAt   DateTime? @db.Timestamptz(3)
+  transactionId String    @unique @db.VarChar(200)
+}
+
+model Account {
+  code  String        @id @db.VarChar(30)
+  name  String        @db.VarChar(100)
+  kind  String        @db.VarChar(20)
+  lines JournalLine[]
+}
+
+model JournalEntry {
+  id           String        @id @default(uuid()) @db.Uuid
+  source       String        @unique @db.VarChar(200)
+  description  String        @db.VarChar(500)
+  status       String        @default("DRAFT") @db.VarChar(20)
+  reversalOfId String?       @unique @db.Uuid
+  actorId      String        @db.Uuid
+  occurredAt   DateTime      @db.Timestamptz(3)
+  createdAt    DateTime      @default(now()) @db.Timestamptz(3)
+  lines        JournalLine[]
+
+  @@index([occurredAt])
+}
+
+model JournalLine {
+  id          String       @id @default(uuid()) @db.Uuid
+  entryId     String       @db.Uuid
+  entry       JournalEntry @relation(fields: [entryId], references: [id], onDelete: Restrict)
+  accountCode String       @db.VarChar(30)
+  account     Account      @relation(fields: [accountCode], references: [code], onDelete: Restrict)
+  debit       BigInt       @default(0)
+  credit      BigInt       @default(0)
+
+  @@index([accountCode])
+}
+
+model FinancialAccount {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @db.VarChar(100)
+  accountCode String   @unique @db.VarChar(30)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+}
+
+model ExpenseCategory {
+  id   String @id @default(uuid()) @db.Uuid
+  name String @unique @db.VarChar(100)
+}
+
+model Expense {
+  id          String            @id @default(uuid()) @db.Uuid
+  categoryId  String            @db.Uuid
+  description String            @db.VarChar(500)
+  payee       String            @db.VarChar(200)
+  amount      BigInt
+  occurredAt  DateTime          @db.Timestamptz(3)
+  status      String            @default("DRAFT") @db.VarChar(20)
+  actorId     String            @db.Uuid
+  createdAt   DateTime          @default(now()) @db.Timestamptz(3)
+  documents   ExpenseDocument[]
+
+  @@index([occurredAt])
+}
+
+model ExpenseDocument {
+  id        String   @id @default(uuid()) @db.Uuid
+  expenseId String   @db.Uuid
+  expense   Expense  @relation(fields: [expenseId], references: [id], onDelete: Restrict)
+  name      String   @db.VarChar(200)
+  mime      String   @db.VarChar(100)
+  content   Bytes
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([expenseId])
+}
+
+model OpeningBalance {
+  id                 String   @id @default(uuid()) @db.Uuid
+  financialAccountId String   @unique @db.Uuid
+  amount             BigInt
+  occurredAt         DateTime @db.Timestamptz(3)
+  reason             String   @db.VarChar(500)
+  actorId            String   @db.Uuid
+}
+
+model Reconciliation {
+  id                 String   @id @default(uuid()) @db.Uuid
+  intentId           String   @unique @db.Uuid
+  financialAccountId String   @db.Uuid
+  reference          String   @unique @db.VarChar(200)
+  amount             BigInt
+  fee                BigInt
+  settledAt          DateTime @db.Timestamptz(3)
+  actorId            String   @db.Uuid
+}
+
+model OutboxJob {
+  id          String    @id @default(uuid()) @db.Uuid
+  key         String    @unique @db.VarChar(200)
+  kind        String    @db.VarChar(40)
+  payload     Json
+  status      String    @default("PENDING") @db.VarChar(20)
+  attempts    Int       @default(0)
+  availableAt DateTime  @default(now()) @db.Timestamptz(3)
+  lockedAt    DateTime? @db.Timestamptz(3)
+  lastError   String?   @db.VarChar(500)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@index([status, availableAt])
+}
+
+model InvoiceCorrection {
+  id         String   @id @default(uuid()) @db.Uuid
+  invoiceId  String   @db.Uuid
+  invoice    Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  amount     BigInt
+  reason     String   @db.VarChar(500)
+  actorId    String   @db.Uuid
+  requestKey String   @unique @db.VarChar(100)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([invoiceId])
+}
+
+model Income {
+  id                 String   @id @default(uuid()) @db.Uuid
+  financialAccountId String   @db.Uuid
+  amount             BigInt
+  description        String   @db.VarChar(500)
+  payer              String   @db.VarChar(200)
+  reference          String   @unique @db.VarChar(200)
+  occurredAt         DateTime @db.Timestamptz(3)
+  actorId            String   @db.Uuid
+  status             String   @default("POSTED") @db.VarChar(20)
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([occurredAt])
+}
+
+// Phase 3: private communication records; SQL migration enforces histories and states.
+model Announcement {
+  id            String                  @id @default(uuid()) @db.Uuid
+  title         String                  @db.VarChar(200)
+  content       String                  @db.VarChar(10000)
+  category      String                  @db.VarChar(30)
+  priority      String                  @default("NORMAL") @db.VarChar(20)
+  status        String                  @default("DRAFT") @db.VarChar(20)
+  authorId      String                  @db.Uuid
+  scheduledById String?                 @db.Uuid
+  publishedById String?                 @db.Uuid
+  publishAt     DateTime?               @db.Timestamptz(3)
+  publishedAt   DateTime?               @db.Timestamptz(3)
+  expiresAt     DateTime?               @db.Timestamptz(3)
+  revision      Int                     @default(1)
+  createdAt     DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime                @updatedAt @db.Timestamptz(3)
+  audiences     AnnouncementAudience[]
+  recipients    AnnouncementRecipient[]
+
+  @@index([status, publishAt])
+}
+
+model AnnouncementAudience {
+  id             String       @id @default(uuid()) @db.Uuid
+  announcementId String       @db.Uuid
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Restrict)
+  kind           String       @db.VarChar(20)
+  unitId         String?      @db.Uuid
+
+  @@index([announcementId])
+}
+
+model AnnouncementRecipient {
+  announcementId String       @db.Uuid
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Restrict)
+  userId         String       @db.Uuid
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@id([announcementId, userId])
+  @@index([userId])
+}
+
+model AnnouncementRead {
+  announcementId String   @db.Uuid
+  userId         String   @db.Uuid
+  readAt         DateTime @default(now()) @db.Timestamptz(3)
+
+  @@id([announcementId, userId])
+}
+
+model Notification {
+  id         String                 @id @default(uuid()) @db.Uuid
+  userId     String                 @db.Uuid
+  eventKey   String                 @db.VarChar(200)
+  category   String                 @db.VarChar(30)
+  title      String                 @db.VarChar(200)
+  body       String                 @db.VarChar(500)
+  href       String                 @db.VarChar(300)
+  mandatory  Boolean                @default(false)
+  readAt     DateTime?              @db.Timestamptz(3)
+  createdAt  DateTime               @default(now()) @db.Timestamptz(3)
+  deliveries NotificationDelivery[]
+
+  @@unique([userId, eventKey])
+  @@index([userId, createdAt, id])
+}
+
+model NotificationPreference {
+  userId    String   @id @db.Uuid
+  general   Boolean  @default(true)
+  financial Boolean  @default(true)
+  meetings  Boolean  @default(true)
+  tickets   Boolean  @default(true)
+  push      Boolean  @default(false)
+  sms       Boolean  @default(false)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+}
+
+model NotificationDelivery {
+  id                String                        @id @default(uuid()) @db.Uuid
+  notificationId    String                        @db.Uuid
+  notification      Notification                  @relation(fields: [notificationId], references: [id], onDelete: Restrict)
+  channel           String                        @db.VarChar(10)
+  targetKey         String                        @db.VarChar(100)
+  subscriptionId    String?                       @db.Uuid
+  status            String                        @default("PENDING") @db.VarChar(20)
+  attempts          Int                           @default(0)
+  lockedAt          DateTime?                     @db.Timestamptz(3)
+  nextAttemptAt     DateTime                      @default(now()) @db.Timestamptz(3)
+  providerMessageId String?                       @db.VarChar(200)
+  lastError         String?                       @db.VarChar(40)
+  createdAt         DateTime                      @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime                      @updatedAt @db.Timestamptz(3)
+  logs              NotificationDeliveryAttempt[]
+
+  @@unique([notificationId, channel, targetKey])
+  @@index([status, nextAttemptAt])
+}
+
+model NotificationDeliveryAttempt {
+  id                String               @id @default(uuid()) @db.Uuid
+  deliveryId        String               @db.Uuid
+  delivery          NotificationDelivery @relation(fields: [deliveryId], references: [id], onDelete: Restrict)
+  number            Int
+  status            String               @db.VarChar(20)
+  errorCode         String?              @db.VarChar(40)
+  providerMessageId String?              @db.VarChar(200)
+  startedAt         DateTime             @default(now()) @db.Timestamptz(3)
+  finishedAt        DateTime?            @db.Timestamptz(3)
+
+  @@unique([deliveryId, number])
+}
+
+model PushSubscription {
+  id                    String    @id @default(uuid()) @db.Uuid
+  userId                String    @db.Uuid
+  endpointHash          String    @unique @db.Char(64)
+  encryptedSubscription String    @db.Text
+  deviceName            String    @db.VarChar(100)
+  expiresAt             DateTime? @db.Timestamptz(3)
+  revokedAt             DateTime? @db.Timestamptz(3)
+  lastUsedAt            DateTime? @db.Timestamptz(3)
+  createdAt             DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@index([userId, revokedAt])
+}
+
+model SmsTemplate {
+  key      String @id @db.VarChar(40)
+  category String @db.VarChar(30)
+  content  String @db.VarChar(500)
+}
+
+model SmsDelivery {
+  dispatchKey       String?  @unique @db.VarChar(64)
+  eventKey          String?  @db.VarChar(80)
+  id                String   @id @default(uuid()) @db.Uuid
+  deliveryId        String   @unique @db.Uuid
+  templateKey       String   @db.VarChar(40)
+  phoneHash         String   @db.Char(64)
+  status            String   @default("PENDING") @db.VarChar(20)
+  providerMessageId String?  @db.VarChar(200)
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([eventKey])
+}
+
+model Ticket {
+  id           String          @id @default(uuid()) @db.Uuid
+  number       Int             @unique @default(autoincrement())
+  requestKey   String          @unique @db.VarChar(100)
+  title        String          @db.VarChar(200)
+  description  String          @db.VarChar(10000)
+  category     String          @db.VarChar(30)
+  priority     String          @default("NORMAL") @db.VarChar(20)
+  creatorId    String          @db.Uuid
+  unitId       String?         @db.Uuid
+  assignedToId String?         @db.Uuid
+  status       String          @default("OPEN") @db.VarChar(30)
+  createdAt    DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime        @updatedAt @db.Timestamptz(3)
+  comments     TicketComment[]
+  events       TicketEvent[]
+
+  @@index([creatorId, createdAt])
+  @@index([status, assignedToId])
+}
+
+model TicketComment {
+  id         String   @id @default(uuid()) @db.Uuid
+  ticketId   String   @db.Uuid
+  ticket     Ticket   @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  authorId   String   @db.Uuid
+  requestKey String   @unique @db.VarChar(100)
+  content    String   @db.VarChar(5000)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([ticketId, createdAt])
+}
+
+model TicketEvent {
+  id             String   @id @default(uuid()) @db.Uuid
+  ticketId       String   @db.Uuid
+  ticket         Ticket   @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  actorId        String   @db.Uuid
+  kind           String   @db.VarChar(30)
+  previousStatus String?  @db.VarChar(30)
+  status         String   @db.VarChar(30)
+  reason         String   @db.VarChar(500)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([ticketId, createdAt])
+}
+
+model Meeting {
+  id           String               @id @default(uuid()) @db.Uuid
+  title        String               @db.VarChar(200)
+  description  String               @db.VarChar(10000)
+  agenda       String               @db.VarChar(10000)
+  kind         String               @db.VarChar(20)
+  status       String               @default("SCHEDULED") @db.VarChar(20)
+  startsAt     DateTime             @db.Timestamptz(3)
+  location     String               @db.VarChar(300)
+  onlineUrl    String?              @db.VarChar(1000)
+  authorId     String               @db.Uuid
+  revision     Int                  @default(1)
+  createdAt    DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime             @updatedAt @db.Timestamptz(3)
+  participants MeetingParticipant[]
+  minutes      MeetingMinutes[]
+
+  @@index([startsAt, status])
+}
+
+model MeetingParticipant {
+  meetingId    String    @db.Uuid
+  meeting      Meeting   @relation(fields: [meetingId], references: [id], onDelete: Restrict)
+  userId       String    @db.Uuid
+  rsvp         String    @default("PENDING") @db.VarChar(20)
+  attendance   String    @default("UNRECORDED") @db.VarChar(20)
+  recordedById String?   @db.Uuid
+  recordedAt   DateTime? @db.Timestamptz(3)
+
+  @@id([meetingId, userId])
+  @@index([userId])
+}
+
+model MeetingMinutes {
+  id              String   @id @default(uuid()) @db.Uuid
+  meetingId       String   @db.Uuid
+  meeting         Meeting  @relation(fields: [meetingId], references: [id], onDelete: Restrict)
+  version         Int
+  status          String   @db.VarChar(20)
+  content         String   @db.VarChar(20000)
+  amendmentReason String?  @db.VarChar(500)
+  authorId        String   @db.Uuid
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([meetingId, version])
+}
+
+model Resolution {
+  id        String              @id @default(uuid()) @db.Uuid
+  number    Int                 @unique @default(autoincrement())
+  meetingId String              @db.Uuid
+  createdAt DateTime            @default(now()) @db.Timestamptz(3)
+  versions  ResolutionVersion[]
+
+  @@index([meetingId])
+}
+
+model ResolutionVersion {
+  id              String     @id @default(uuid()) @db.Uuid
+  resolutionId    String     @db.Uuid
+  resolution      Resolution @relation(fields: [resolutionId], references: [id], onDelete: Restrict)
+  version         Int
+  content         String     @db.VarChar(10000)
+  status          String     @db.VarChar(20)
+  decisionAt      DateTime   @db.Timestamptz(3)
+  effectiveAt     DateTime   @db.Timestamptz(3)
+  responsibleId   String     @db.Uuid
+  responsibleName String     @db.VarChar(100)
+  authorId        String     @db.Uuid
+  amendmentReason String?    @db.VarChar(500)
+  createdAt       DateTime   @default(now()) @db.Timestamptz(3)
+
+  @@unique([resolutionId, version])
+}
+
+model CommunicationAttachment {
+  id                  String   @id @default(uuid()) @db.Uuid
+  announcementId      String?  @db.Uuid
+  ticketId            String?  @db.Uuid
+  meetingId           String?  @db.Uuid
+  minutesId           String?  @db.Uuid
+  resolutionVersionId String?  @db.Uuid
+  uploaderId          String   @db.Uuid
+  name                String   @db.VarChar(200)
+  mime                String   @db.VarChar(100)
+  content             Bytes
+  createdAt           DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([announcementId])
+  @@index([ticketId])
+  @@index([meetingId])
+  @@index([minutesId])
+  @@index([resolutionVersionId])
+}
+
+model UnitContact {
+  id        String   @id @default(uuid()) @db.Uuid
+  unitId    String   @db.Uuid
+  unit      Unit     @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  kind      String   @db.VarChar(10)
+  name      String   @db.VarChar(100)
+  phone     String?  @db.VarChar(13)
+  userId    String?  @db.Uuid
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([unitId, kind])
+  @@index([phone])
+}
+
+model SmsProviderSetting {
+  senderSource           String? @db.VarChar(20)
+  senderPatternConfirmed Boolean @default(false)
+
+  senderLines     Json      @default("[]")
+  senderKeyHash   String?   @db.VarChar(64)
+  senderCheckedAt DateTime? @db.Timestamptz(3)
+
+  key             String   @id @db.VarChar(20)
+  enabled         Boolean  @default(false)
+  encryptedApiKey String?  @db.Text
+  fromNumber      String   @db.VarChar(20)
+  patterns        Json
+  updatedById     String   @db.Uuid
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+}
+
+model SmsEventTemplate {
+  eventKey        String   @id @db.VarChar(80)
+  patternName     String   @unique @db.VarChar(80)
+  providerCode    String?  @db.VarChar(100)
+  enabled         Boolean  @default(false)
+  variableMapping Json
+  category        String   @db.VarChar(30)
+  description     String   @db.VarChar(500)
+  updatedById     String?  @db.Uuid
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([category, enabled])
+}
+
+model SmsReminderPolicy {
+  key           String   @id @db.VarChar(20)
+  beforeDueDays Int      @default(3)
+  overdueDays   Int      @default(2)
+  followupDays  Int?     @default(7)
+  meetingHours  Int      @default(24)
+  updatedById   String?  @db.Uuid
+  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
+}

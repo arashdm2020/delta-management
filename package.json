@@ -1,0 +1,63 @@
+{
+  "name": "delta-management",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --hostname 127.0.0.1",
+    "build": "prisma generate && next build",
+    "start": "next start --hostname 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "tsx --test tests/unit.test.ts",
+    "test:integration": "tsx --test --test-concurrency=1 tests/integration.test.ts tests/finance.test.ts tests/communications.test.ts",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:local": "tsx scripts/local-db.ts",
+    "admin:bootstrap": "tsx scripts/bootstrap-admin.ts",
+    "test:e2e": "tsx tests/e2e.ts && tsx tests/finance-e2e.ts && tsx tests/communications-e2e.ts",
+    "finance:worker": "tsx scripts/finance-worker.ts",
+    "test:finance": "tsx --test --test-concurrency=1 tests/finance.test.ts",
+    "test:e2e:finance": "tsx tests/finance-e2e.ts",
+    "test:communications": "tsx --test --test-concurrency=1 tests/communications.test.ts",
+    "communications:worker": "tsx scripts/finance-worker.ts",
+    "test:e2e:communications": "tsx tests/communications-e2e.ts"
+  },
+  "dependencies": {
+    "@fontsource-variable/vazirmatn": "^5.3.0",
+    "@hookform/resolvers": "^5.2.0",
+    "@prisma/client": "6.19.3",
+    "@radix-ui/react-slot": "^1.2.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.577.0",
+    "next": "16.4.6",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-hook-form": "^7.66.0",
+    "server-only": "^0.0.1",
+    "tailwind-merge": "^3.4.0",
+    "web-push": "^4.0.0",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.0",
+    "@tailwindcss/postcss": "^4.1.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@types/web-push": "^3.6.4",
+    "embedded-postgres": "^18.1.0-beta.15",
+    "eslint": "^9.39.0",
+    "eslint-config-next": "16.4.6",
+    "prisma": "6.19.3",
+    "tailwindcss": "^4.1.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  },
+  "overrides": {
+    "effect": "^3.22.5",
+    "deepmerge-ts": "^8.0.2"
+  }
+}

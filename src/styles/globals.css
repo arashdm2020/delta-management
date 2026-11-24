@@ -1,0 +1,120 @@
+@import "tailwindcss";
+@import "@fontsource-variable/vazirmatn";
+@theme inline {
+  --font-sans: "Vazirmatn Variable", Tahoma, sans-serif;
+  --color-background: #f0f7ff;
+  --color-card: #ffffff;
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-soft: #e8f1ff;
+  --color-foreground: #1e293b;
+  --color-secondary: #64748b;
+  --color-border: #e2e8f0;
+  --color-input: #94a3b8;
+}
+* {
+  box-sizing: border-box;
+}
+html {
+  scrollbar-gutter: stable;
+}
+body {
+  margin: 0;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  line-height: 1.7;
+}
+button,
+a,
+input,
+select {
+  touch-action: manipulation;
+}
+button:not(:disabled),
+select {
+  cursor: pointer;
+}
+a,
+button,
+input,
+select {
+  outline-offset: 4px;
+}
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--color-primary);
+}
+select {
+  min-height: 3rem;
+  max-width: 100%;
+  border: 1px solid var(--color-input);
+  border-radius: 0.75rem;
+  background: white;
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  font-size: 0.875rem;
+}
+label.field {
+  display: grid;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+.nav-extra {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: 0.75rem;
+  padding: 0.5rem 1rem;
+  color: var(--color-secondary);
+  font-size: 0.875rem;
+}
+.nav-extra[aria-current="page"],
+.nav-extra:hover {
+  background: var(--color-soft);
+  color: var(--color-primary);
+}
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  inset-inline: 0;
+  z-index: 40;
+  display: flex;
+  gap: 0.2rem;
+  border-top: 1px solid var(--color-border);
+  background: white;
+  padding: 0.5rem 0.6rem calc(0.5rem + env(safe-area-inset-bottom));
+  box-shadow: 0 -6px 30px -20px rgb(30 41 59/0.2);
+}
+@media (min-width: 768px) {
+  .bottom-nav {
+    display: none;
+  }
+}
+.page-heading {
+  margin: 0;
+  font-size: clamp(1.35rem, 3vw, 1.8rem);
+  font-weight: 750;
+  line-height: 1.5;
+}
+.page-description {
+  margin-top: 0.5rem;
+  color: var(--color-secondary);
+  font-size: 0.875rem;
+  line-height: 1.9;
+}
+::selection {
+  background: var(--color-soft);
+  color: var(--color-primary);
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition: none !important;
+    animation: none !important;
+  }
+}
