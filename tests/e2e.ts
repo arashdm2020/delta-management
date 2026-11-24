@@ -64,6 +64,7 @@ try {
   }
   await page.goto(origin + "/home");
   await page.waitForURL("**/login");
+  await page.getByRole("button", { name: "فعلاً نصب نمی‌کنم" }).click();
   const denied = await context.request.post(origin + "/api/auth/request", {
     data: { phone: "09101010101" },
     headers: { Origin: "https://untrusted.invalid" },

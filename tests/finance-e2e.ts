@@ -107,6 +107,7 @@ try {
     await route.fulfill({ json: { challengeId: "e909e093-14fb-4d30-a8da-30cb9f4302d5", deliveryStatus: "unknown" } });
   });
   await recoveryPage.goto(origin + "/login");
+  await recoveryPage.getByRole("button", { name: "فعلاً نصب نمی‌کنم" }).click();
   await recoveryPage.getByLabel("شماره تلفن همراه", { exact: true }).fill("09111000008");
   await recoveryPage.getByRole("button", { name: "دریافت کد ورود", exact: true }).click();
   await expect(recoveryPage.getByLabel("کد یک‌بارمصرف پیامک‌شده", { exact: true })).toBeVisible();

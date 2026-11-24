@@ -1,6 +1,7 @@
 import { Building2, ShieldCheck } from "lucide-react";
 import { AuthForm } from "@/components/shared/auth-form";
 import { Card } from "@/components/ui/card";
+import { LoginInstall } from "@/components/shared/login-install";
 export default function Login() {
   return (
     <main className="grid min-h-dvh place-items-center px-5 py-10">
@@ -12,6 +13,7 @@ export default function Login() {
           <h1 className="page-heading">به ساختمان دلتا خوش آمدید</h1>
           <p className="page-description">یک خانه، یک همراه برای مدیریت بهتر</p>
         </div>
+        <LoginInstall />
         <Card>
           <h2 className="mb-2 text-lg font-bold">ورود به حساب کاربری</h2>
           <p className="mb-7 text-sm leading-7 text-secondary">
