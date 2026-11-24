@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
 import { audit } from "@/modules/audit/service";
 import { smsProvider } from "./sms";
+import { smsFailureDiagnostic } from "@/modules/sms/errors";
 import { normalizePhone } from "@/lib/validation";
 import {
   DomainError,
@@ -92,10 +93,12 @@ export async function requestOtp(
   if (!allowed) throw new DomainError("MEMBER", "ورود فقط برای اعضایی فعال است که مدیریت از قبل معرفی کرده است.");
   try {
     if (!temporaryWindow) await send(phone, code);
-  } catch {
-    await db.oTPChallenge.update({
-      where: { id },
-      data: { consumedAt: new Date() },
+  } catch (error) {
+    const diagnostic = smsFailureDiagnostic(error);
+    console.error("auth.otp.send.failed", diagnostic);
+    await db.$transaction(async (tx) => {
+      await tx.oTPChallenge.update({ where: { id }, data: { consumedAt: new Date() } });
+      await audit("auth.otp.send.failed", null, id, diagnostic, tx);
     });
     throw new DomainError("SMS", "ارسال پیامک در دسترس نیست.");
   }

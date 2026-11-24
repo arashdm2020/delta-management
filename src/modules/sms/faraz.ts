@@ -7,6 +7,7 @@ import {
 import { normalizePhone } from "@/lib/validation";
 import { db } from "@/lib/db";
 import { decryptSmsKey, senderCredentialHash } from "./settings";
+import { SmsProviderError } from "./errors";
 // Verified Vetly / IranPayamak pattern contract. No sender fallback.
 export async function sendFarazEvent<K extends SmsEventKey>(
   phone: string,
@@ -63,24 +64,24 @@ export async function sendFarazEvent<K extends SmsEventKey>(
       },
     );
   } catch {
-    throw new Error("UNKNOWN");
+    throw new SmsProviderError("UNKNOWN", null, "network");
   }
-  if (response.status === 429) throw new Error("TRANSIENT");
+  if (response.status === 429) throw new SmsProviderError("TRANSIENT", 429, "http");
   if (!response.ok)
-    throw new Error(response.status >= 500 ? "UNKNOWN" : "PROVIDER_REJECTED");
+    throw new SmsProviderError(response.status >= 500 ? "UNKNOWN" : "PROVIDER_REJECTED", response.status, "http");
   let body: unknown;
   try {
     body = await response.json();
   } catch {
-    throw new Error("UNKNOWN");
+    throw new SmsProviderError("UNKNOWN", response.status, "json");
   }
   const envelope = z
     .object({ status: z.enum(["success", "error"]), data: z.unknown() })
     .safeParse(body);
-  if (!envelope.success) throw new Error("UNKNOWN");
-  if (envelope.data.status !== "success") throw new Error("PROVIDER_REJECTED");
+  if (!envelope.success) throw new SmsProviderError("UNKNOWN", response.status, "envelope");
+  if (envelope.data.status !== "success") throw new SmsProviderError("PROVIDER_REJECTED", response.status, "provider_status");
   const id = z.number().int().positive().safe().safeParse(envelope.data.data);
-  if (!id.success) throw new Error("UNKNOWN");
+  if (!id.success) throw new SmsProviderError("UNKNOWN", response.status, "message_id");
   return { status: "ACCEPTED" as const, providerMessageId: String(id.data) };
 }
 

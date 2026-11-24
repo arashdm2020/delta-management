@@ -1,5 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { SmsProviderError, smsFailureDiagnostic } from "../src/modules/sms/errors";
+test("SMS diagnostics retain safe codes and HTTP status without copying arbitrary messages", () => {
+  assert.deepEqual(smsFailureDiagnostic(new SmsProviderError("PROVIDER_REJECTED", 403, "http")), { reason: "PROVIDER_REJECTED", httpStatus: 403, stage: "http" });
+  const diagnostic = smsFailureDiagnostic(new Error("private API key and OTP must never enter logs"));
+  assert.deepEqual(diagnostic, { reason: "SMS_SEND_ERROR", httpStatus: null, stage: "configuration_or_send" });
+});
 import { normalizePhone } from "../src/lib/validation";
 import {
   canManage,

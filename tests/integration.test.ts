@@ -16,6 +16,20 @@ let admin: Awaited<ReturnType<typeof db.user.create>> & {
 };
 let resident: typeof admin;
 let tenant: typeof admin;
+test("OTP sender failures consume challenges and retain only safe provider diagnostics", async () => {
+  const { SmsProviderError } = await import("../src/modules/sms/errors");
+  const original = console.error;
+  const emitted: unknown[][] = [];
+  console.error = (...args: unknown[]) => { emitted.push(args); };
+  try {
+    await assert.rejects(requestOtp("+989188000001", "sms-diagnostic", async () => { throw new SmsProviderError("PROVIDER_REJECTED", 401, "http"); }));
+    const challenge = await db.oTPChallenge.findFirstOrThrow({ where: { phone: "+989188000001" } });
+    assert.ok(challenge.consumedAt);
+    const event = await db.auditLog.findFirstOrThrow({ where: { action: "auth.otp.send.failed", targetId: challenge.id } });
+    assert.deepEqual(event.details, { reason: "PROVIDER_REJECTED", httpStatus: 401, stage: "http" });
+    assert.deepEqual(emitted, [["auth.otp.send.failed", event.details]]);
+  } finally { console.error = original; }
+});
 test("members-only login rejects unknown and inactive accounts without public registration", async () => {
   const original = { ...process.env };
   let sent = 0, captured = "";
