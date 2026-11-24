@@ -40,8 +40,8 @@ export function UnitContactForm({
         ورود استفاده می‌شود؛ ورود قبلی لازم نیست.
       </p>
       <label className="flex items-start gap-3 text-sm leading-7">
-        <input type="checkbox" name="approveAccess" className="mt-2" />
-        تأیید صریح دسترسی این شخص به واحد (پس از احراز شماره با کد ورود)
+        <input type="checkbox" name="approveAccess" defaultChecked className="mt-2" />
+        فعال‌کردن ورود این عضو با شمارهٔ ثبت‌شده (بدون ثبت‌نام و تأیید دوباره)
       </label>
     </ActionForm>
   );

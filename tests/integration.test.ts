@@ -16,6 +16,31 @@ let admin: Awaited<ReturnType<typeof db.user.create>> & {
 };
 let resident: typeof admin;
 let tenant: typeof admin;
+test("members-only login rejects unknown and inactive accounts without public registration", async () => {
+  const original = { ...process.env };
+  let sent = 0, captured = "";
+  const send = async (_phone: string, code: string) => { sent++; captured = code; };
+  try {
+    process.env.MEMBERS_ONLY_LOGIN = "true";
+    await assert.rejects(requestOtp("+989177000001", "closed-members", send));
+    assert.equal(await db.user.count({ where: { phone: "+989177000001" } }), 0);
+    assert.equal(await db.oTPChallenge.count({ where: { phone: "+989177000001" } }), 0);
+    const pending = await db.user.create({ data: { phone: "+989177000002", name: "TEST pending member" } });
+    await assert.rejects(requestOtp(pending.phone, "closed-members", send));
+    const unassigned = await db.user.create({ data: { phone: "+989177000003", name: "TEST unassigned member", status: "APPROVED" } });
+    await assert.rejects(requestOtp(unassigned.phone, "closed-members", send));
+    assert.equal(sent, 0);
+    const role = await db.role.findUniqueOrThrow({ where: { name: "SUPER_ADMIN" } });
+    const member = await db.user.create({ data: { phone: "+989177000004", name: "TEST invited manager", status: "APPROVED", roles: { create: { roleId: role.id } } } });
+    const challenge = await requestOtp(member.phone, "closed-members", send);
+    assert.equal(sent, 1);
+    await db.user.update({ where: { id: member.id }, data: { status: "SUSPENDED" } });
+    await assert.rejects(verifyOtp(challenge.challengeId, captured, "closed-members"));
+    assert.equal(await db.session.count({ where: { userId: member.id } }), 0);
+    await db.user.update({ where: { id: member.id }, data: { status: "APPROVED" } });
+    assert.equal((await verifyOtp(challenge.challengeId, captured, "closed-members")).user.id, member.id);
+  } finally { process.env = original; }
+});
 test("temporary production OTP skips SMS only for the authorized account and preserves security gates", async () => {
   const original = { ...process.env };
   const start = new Date(Date.now() - 120000);

@@ -1,5 +1,6 @@
 import { acceptsDevelopmentOtp } from "./development-otp";
 import { temporaryLoginWindow, temporaryOtpExpiry } from "./temporary-login";
+import type { Prisma } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
 import { audit } from "@/modules/audit/service";
@@ -13,7 +14,22 @@ import {
   otpValid,
   randomOtp,
   randomToken,
+  canManage,
 } from "@/lib/security/core";
+function membersOnlyLogin() {
+  return process.env.MEMBERS_ONLY_LOGIN === "true";
+}
+async function eligibleMember(tx: Prisma.TransactionClient, phone: string, now: Date) {
+  const user = await tx.user.findUnique({
+    where: { phone },
+    include: { roles: { include: { role: true } } },
+  });
+  if (!user || user.status !== "APPROVED" || !user.name) return false;
+  if (canManage(user)) return true;
+  return Boolean(await tx.unitMembership.findFirst({
+    where: { userId: user.id, startsAt: { lte: now }, endsAt: null, unit: { active: true } },
+  }));
+}
 export async function requestOtp(
   rawPhone: string,
   origin: string,
@@ -24,7 +40,7 @@ export async function requestOtp(
   const id = randomUUID();
   const now = new Date();
   const temporaryWindow = temporaryLoginWindow(phone, now);
-  await db.$transaction(async (tx) => {
+  const allowed = await db.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${phone}))`;
     for (const [key, limit] of [
       ["phone:" + phone, 5],
@@ -41,6 +57,10 @@ export async function requestOtp(
           "RATE",
           "تعداد درخواست‌ها زیاد است؛ بعداً تلاش کنید.",
         );
+    }
+    if (membersOnlyLogin() && !(await eligibleMember(tx, phone, now))) {
+      await audit("auth.member.denied", null, undefined, { phoneHash: hashToken(phone) }, tx);
+      return false;
     }
     const previous = await tx.oTPChallenge.findFirst({
       where: { phone },
@@ -67,7 +87,9 @@ export async function requestOtp(
       { phoneHash: hashToken(phone), temporary: Boolean(temporaryWindow) },
       tx,
     );
+    return true;
   });
+  if (!allowed) throw new DomainError("MEMBER", "ورود فقط برای اعضایی فعال است که مدیریت از قبل معرفی کرده است.");
   try {
     if (!temporaryWindow) await send(phone, code);
   } catch {
@@ -97,6 +119,7 @@ export async function verifyOtp(id: string, code: string, origin: string) {
       where: { id },
       data: { attempts: { increment: 1 } },
     });
+    if (membersOnlyLogin() && !(await eligibleMember(tx, challenge.phone, new Date()))) return null;
     const temporaryExpiry = temporaryOtpExpiry(challenge.phone, code, challenge.createdAt);
     if (!temporaryExpiry && !acceptsDevelopmentOtp(code) && !equalHash(challenge.codeHash, otpHash(id, code))) {
       await audit("auth.otp.failed", null, id, {}, tx);
@@ -106,7 +129,9 @@ export async function verifyOtp(id: string, code: string, origin: string) {
       where: { id },
       data: { consumedAt: new Date() },
     });
-    const user = await tx.user.upsert({
+    const user = membersOnlyLogin()
+      ? await tx.user.findUniqueOrThrow({ where: { phone: challenge.phone } })
+      : await tx.user.upsert({
       where: { phone: challenge.phone },
       create: { phone: challenge.phone },
       update: {},

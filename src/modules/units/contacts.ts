@@ -53,8 +53,7 @@ export async function saveUnitContact(actor: Actor, input: unknown) {
           );
         }
       }
-    } else if (data.approveAccess)
-      fail("برای تأیید دسترسی، شماره همراه لازم است.");
+    }
     if (previous?.userId && previous.userId !== userId) {
       const now = new Date();
       const memberships = await tx.unitMembership.findMany({

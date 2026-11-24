@@ -173,6 +173,7 @@ try {
     null,
   );
   await tenantForm.locator('input[name="phone"]').fill("09111000009");
+  await expect(tenantForm.locator('input[name="approveAccess"]')).toBeChecked();
   await tenantForm.getByRole("button").click();
   await expect
     .poll(
@@ -180,7 +181,7 @@ try {
         (await db.user.findUnique({ where: { phone: "+989111000009" } }))
           ?.status,
     )
-    .toBe("PENDING");
+    .toBe("APPROVED");
   await page.goto(origin + "/management/sms");
   await page
     .getByLabel("کلید API فراز پیامک", { exact: true })

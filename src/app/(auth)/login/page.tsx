@@ -15,8 +15,9 @@ export default function Login() {
         <Card>
           <h2 className="mb-2 text-lg font-bold">ورود به حساب کاربری</h2>
           <p className="mb-7 text-sm leading-7 text-secondary">
-            با شمارهٔ همراه خود وارد شوید. دسترسی به ساختمان پس از تأیید مدیریت
-            فعال می‌شود.
+            {process.env.MEMBERS_ONLY_LOGIN === "true"
+              ? "ورود ویژهٔ اعضای ساختمان است. از شماره‌ای استفاده کنید که مدیریت برای شما ثبت کرده است؛ ثبت‌نام عمومی وجود ندارد."
+              : "با شمارهٔ همراه خود وارد شوید. دسترسی به ساختمان پس از تأیید مدیریت فعال می‌شود."}
           </p>
           <AuthForm />
         </Card>
