@@ -149,7 +149,7 @@ export async function UnitFinance({
           <label className="field">
             نوع بدهی
             <select name="kind">
-              <option value="HISTORICAL">شارژ پرداخت‌نشدهٔ ماه قبل</option>
+              <option value="HISTORICAL">شارژ پرداخت‌نشدهٔ ماه جاری یا قبل</option>
               <option value="OPENING">ماندهٔ انتقالی ابتدای دوره</option>
               <option value="MISC">هزینهٔ موردی</option>
             </select>

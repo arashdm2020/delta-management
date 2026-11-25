@@ -6,10 +6,14 @@ import type { Prisma } from "@prisma/client";
 function authorize(actor: Actor) {
   if (!canManage(actor)) fail("دسترسی مدیریت لازم است.");
 }
-export async function saveUnit(actor: Actor, input: unknown) {
+export async function saveUnit(
+  actor: Actor,
+  input: unknown,
+  transaction?: Prisma.TransactionClient,
+) {
   authorize(actor);
   const data = unitSchema.parse(input);
-  return db.$transaction(async (tx) => {
+  const save = async (tx: Prisma.TransactionClient) => {
     const building = await tx.building.findUniqueOrThrow({
       where: { key: "delta" },
     });
@@ -70,7 +74,8 @@ export async function saveUnit(actor: Actor, input: unknown) {
       tx,
     );
     return unit;
-  });
+  };
+  return transaction ? save(transaction) : db.$transaction(save);
 }
 export async function assignMember(actor: Actor, input: unknown) {
   authorize(actor);

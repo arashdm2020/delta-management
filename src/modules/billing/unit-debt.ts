@@ -27,6 +27,7 @@ export async function recordUnitDebt(
     description: string;
     amount: bigint;
   },
+  transaction?: Prisma.TransactionClient,
 ) {
   manager(actor);
   const id = identifier.parse(input.id);
@@ -41,14 +42,9 @@ export async function recordUnitDebt(
     .max(300)
     .parse(input.description);
   const { amount } = input;
-  if (
-    amount <= 0n ||
-    amount > maxAmount ||
-    bounds.startsAt > new Date() ||
-    (kind === "HISTORICAL" && bounds.endsAt > new Date())
-  )
+  if (amount <= 0n || amount > maxAmount || bounds.startsAt > new Date())
     fail("مبلغ یا دورهٔ بدهی معتبر نیست.");
-  return db.$transaction(async (tx) => {
+  const record = async (tx: Prisma.TransactionClient) => {
     await lock(tx, unitId);
     const existing = await tx.unitDebt.findUnique({ where: { id } });
     if (existing) {
@@ -114,7 +110,8 @@ export async function recordUnitDebt(
       tx,
     );
     return debt;
-  });
+  };
+  return transaction ? record(transaction) : db.$transaction(record);
 }
 
 export async function unitDebtEntries(
