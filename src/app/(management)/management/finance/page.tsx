@@ -160,8 +160,8 @@ export default async function Finance({
               </label>
             )}
             <label className="field">
-              دلیل ثبت / تغییر
-              <Input name="reason" minLength={3} maxLength={500} required />
+              {policies.length ? "دلیل تغییر" : "توضیح ثبت اولیه (اختیاری)"}
+              <Input name="reason" minLength={3} maxLength={500} required={policies.length > 0} />
             </label>
           </FinanceForm>
           <p className="mt-4 text-xs leading-6 text-secondary">

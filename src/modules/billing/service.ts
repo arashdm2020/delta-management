@@ -19,7 +19,6 @@ export async function createPolicy(
   approvalMinutesId?: string,
 ) {
   manager(actor);
-  const reason = reasonSchema.parse(rawReason);
   const { startsAt } = periodBounds(effectivePeriod);
   if (amount <= 0n || amount > 9223372036854775807n) fail("مبلغ معتبر نیست.");
   return db.$transaction(async (tx) => {
@@ -27,6 +26,7 @@ export async function createPolicy(
     const previous = await tx.chargePolicy.findFirst({
       orderBy: { startsAt: "desc" },
     });
+    const reason = previous ? reasonSchema.parse(rawReason) : (rawReason.trim() ? reasonSchema.parse(rawReason) : "ثبت اولیهٔ شارژ");
     if (previous) {
       const minutes = approvalMinutesId
         ? await tx.meetingMinutes.findUnique({

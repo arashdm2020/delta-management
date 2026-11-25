@@ -142,9 +142,10 @@ test("policies are append-only, effective-dated and cannot overlap", async () =>
     admin,
     1000000n,
     previous,
-    "initial test policy",
+    "",
   );
   assert.equal(first.endsAt, null, "Initial monthly amount remains effective indefinitely");
+  await assert.rejects(createPolicy(admin, 2000000n, key, "", approvalMinutesId));
   await assert.rejects(
     createPolicy(admin, 2000000n, key, "unapproved change"),
     /صورتجلسه/,
