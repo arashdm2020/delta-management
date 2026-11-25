@@ -8,13 +8,7 @@ import { normalizePhone } from "@/lib/validation";
 import { db } from "@/lib/db";
 import { decryptSmsKey, senderCredentialHash } from "./settings";
 import { SmsProviderError } from "./errors";
-// Verified Vetly / IranPayamak pattern contract. No sender fallback.
-export async function sendFarazEvent<K extends SmsEventKey>(
-  phone: string,
-  event: K,
-  payload: SmsEventPayloads[K],
-  transport: typeof fetch = fetch,
-) {
+export async function farazPatternConfiguration(event: SmsEventKey) {
   const setting = await db.smsProviderSetting.findUnique({
     where: { key: "farazsms" },
   });
@@ -39,6 +33,16 @@ export async function sendFarazEvent<K extends SmsEventKey>(
   });
   if (!template?.enabled) throw new Error("PATTERN_DISABLED");
   if (!template.providerCode) throw new Error("SMS_MAPPING_INVALID");
+  return { setting, apiKey, template };
+}
+// Verified Vetly / IranPayamak pattern contract. No sender fallback.
+export async function sendFarazEvent<K extends SmsEventKey>(
+  phone: string,
+  event: K,
+  payload: SmsEventPayloads[K],
+  transport: typeof fetch = fetch,
+) {
+  const { setting, apiKey, template } = await farazPatternConfiguration(event);
   const params = mappedVariables(event, payload, template.variableMapping);
   let response: Response;
   try {
@@ -66,9 +70,14 @@ export async function sendFarazEvent<K extends SmsEventKey>(
   } catch {
     throw new SmsProviderError("UNKNOWN", null, "network");
   }
-  if (response.status === 429) throw new SmsProviderError("TRANSIENT", 429, "http");
+  if (response.status === 429)
+    throw new SmsProviderError("TRANSIENT", 429, "http");
   if (!response.ok)
-    throw new SmsProviderError(response.status >= 500 ? "UNKNOWN" : "PROVIDER_REJECTED", response.status, "http");
+    throw new SmsProviderError(
+      response.status >= 500 ? "UNKNOWN" : "PROVIDER_REJECTED",
+      response.status,
+      "http",
+    );
   let body: unknown;
   try {
     body = await response.json();
@@ -78,10 +87,17 @@ export async function sendFarazEvent<K extends SmsEventKey>(
   const envelope = z
     .object({ status: z.enum(["success", "error"]), data: z.unknown() })
     .safeParse(body);
-  if (!envelope.success) throw new SmsProviderError("UNKNOWN", response.status, "envelope");
-  if (envelope.data.status !== "success") throw new SmsProviderError("PROVIDER_REJECTED", response.status, "provider_status");
+  if (!envelope.success)
+    throw new SmsProviderError("UNKNOWN", response.status, "envelope");
+  if (envelope.data.status !== "success")
+    throw new SmsProviderError(
+      "PROVIDER_REJECTED",
+      response.status,
+      "provider_status",
+    );
   const id = z.number().int().positive().safe().safeParse(envelope.data.data);
-  if (!id.success) throw new SmsProviderError("UNKNOWN", response.status, "message_id");
+  if (!id.success)
+    throw new SmsProviderError("UNKNOWN", response.status, "message_id");
   return { status: "ACCEPTED" as const, providerMessageId: String(id.data) };
 }
 

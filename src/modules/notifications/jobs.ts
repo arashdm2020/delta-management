@@ -11,6 +11,11 @@ export async function processCommunicationJob(
   payload: Record<string, unknown>,
 ) {
   switch (kind) {
+    case "COMM_BOARD_SMS": {
+      const { dispatchBoardSms } = await import("@/modules/sms/board");
+      await dispatchBoardSms(payload);
+      break;
+    }
     case "COMM_PUBLISH":
       await publishScheduled(
         String(payload.id),

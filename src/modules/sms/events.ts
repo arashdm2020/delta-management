@@ -53,6 +53,18 @@ export const smsEvents = {
     category: "tickets",
     schema: z.object({ ticket: text, status: text }).strict(),
   },
+  "announcement.board": {
+    pattern: "delta_board_announcement",
+    title: "اطلاعیه هیئت‌مدیره",
+    category: "operational",
+    schema: z
+      .object({
+        message: z.enum([
+          "اطلاعیه ساختمان؛ برای مشاهده جزئیات وارد سامانه شوید.",
+        ]),
+      })
+      .strict(),
+  },
   "announcement.emergency": {
     pattern: "delta_urgent_alert",
     title: "اطلاعیه اضطراری",
