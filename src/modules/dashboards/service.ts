@@ -1,7 +1,13 @@
+import {
+  receivableEntries,
+  summarizeReceivables,
+} from "@/modules/accounting/receivables";
+import { balance } from "@/modules/accounting/service";
+import { currentPeriod, periodBounds } from "@/modules/billing/calendar";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { canManage, fail, DomainError, type Actor } from "@/lib/security/core";
-import { invoiceState, myInvoices } from "@/modules/financial-reports/service";
+import { myInvoices } from "@/modules/financial-reports/service";
 import { announcementList } from "@/modules/announcements/service";
 import {
   arrangeUnits,
@@ -20,7 +26,8 @@ export async function managementOverview(actor: Actor) {
       const [
         units,
         groups,
-        invoices,
+        entries,
+        accountsPayable,
         pending,
         openTickets,
         serviceIssues,
@@ -48,16 +55,8 @@ export async function managementOverview(actor: Actor) {
           include: { members: true },
           orderBy: { startsAt: "desc" },
         }),
-        tx.invoice.findMany({
-          include: {
-            corrections: true,
-            allocations: true,
-            intents: {
-              where: { status: "VERIFIED" },
-              select: { amount: true },
-            },
-          },
-        }),
+        receivableEntries(tx),
+        balance(tx, "AP"),
         tx.user.count({ where: { status: "PENDING" } }),
         tx.ticket.count({
           where: { status: { notIn: ["RESOLVED", "CLOSED"] } },
@@ -86,24 +85,8 @@ export async function managementOverview(actor: Actor) {
           where: { status: "SCHEDULED", startsAt: { gte: now } },
         }),
       ]);
-      const financial = new Map<
-        string,
-        { outstanding: bigint; paid: bigint }
-      >();
-      const unitIds = new Set(units.map((u) => u.id));
-      let collected = 0n;
-      for (const invoice of invoices) {
-        if (!unitIds.has(invoice.unitId)) continue;
-        collected += invoice.intents.reduce((sum, p) => sum + p.amount, 0n);
-        const state = invoiceState(invoice);
-        const row = financial.get(invoice.unitId) || {
-          outstanding: 0n,
-          paid: 0n,
-        };
-        row.outstanding += state.outstanding;
-        row.paid += state.paid;
-        financial.set(invoice.unitId, row);
-      }
+      const { startsAt, endsAt } = periodBounds(currentPeriod(now));
+      const financial = summarizeReceivables(entries, startsAt, endsAt, now);
       const rows = units
         .toSorted(
           (a, b) =>
@@ -134,7 +117,11 @@ export async function managementOverview(actor: Actor) {
           pending: unit.memberships.filter((m) => m.user.status === "PENDING")
             .length,
           hasPayer: unit.responsibilities.length > 0,
-          ...(financial.get(unit.id) || { outstanding: 0n, paid: 0n }),
+          ...(financial.units.get(unit.id) || {
+            outstanding: 0n,
+            overdue: 0n,
+            paid: 0n,
+          }),
         }));
       // Financial totals are reduced once per Unit, never once per membership or
       // once per rendered physical group.
@@ -170,11 +157,12 @@ export async function managementOverview(actor: Actor) {
         serviceIssues,
         announcements,
         meetings,
-        outstanding: [...financial.values()].reduce(
-          (sum, f) => sum + f.outstanding,
-          0n,
-        ),
-        collected,
+        outstanding: financial.outstanding,
+        collected: financial.collected,
+        monthlyCharges: financial.monthlyCharges,
+        monthlyCollections: financial.monthlyCollections,
+        otherReceivables: financial.otherReceivables,
+        payable: -accountsPayable,
         residents: new Set(
           rows.flatMap((u) =>
             u.people

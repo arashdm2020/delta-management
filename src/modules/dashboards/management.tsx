@@ -12,20 +12,61 @@ export async function ManagementDashboard({ actor }: { actor: Actor }) {
   return (
     <div className="min-w-0 space-y-6">
       <div>
-        <h1 className="page-heading">نمای کلی ساختمان</h1>
-        <p className="page-description">
-          وضعیت واحدها، ساکنان و ماندهٔ شارژ ساختمان را در یک نگاه ببینید.
-        </p>
+        <h1 className="page-heading">پنل عملیاتی هیئت‌مدیره</h1>
       </div>
+      <nav className="flex flex-wrap gap-2" aria-label="عملیات سریع">
+        {[
+          ["/management/finance", "صدور شارژ"],
+          ["/management/finance/payments", "پرداخت‌ها"],
+          ["/management/expenses", "هزینه‌ها"],
+          ["/management/communications#board-sms", "ارسال پیامک"],
+        ].map(([href, label]) => (
+          <Link
+            key={href}
+            className="nav-extra bg-white text-primary"
+            href={href}
+          >
+            {label}
+          </Link>
+        ))}
+      </nav>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
-          { label: "واحد ثبت‌شده", value: digits(data.units.length) },
-          { label: "اعضای دارای دسترسی", value: digits(data.residents) },
+          { label: "ماندهٔ کل مطالبات", value: rialToToman(data.outstanding) },
           {
-            label: "ماندهٔ شارژ ساختمان",
-            value: rialToToman(data.outstanding),
+            label: "بدهی تاریخی، انتقالی و موردی",
+            value: rialToToman(data.otherReceivables),
           },
-          { label: "پرداخت تأییدشده", value: rialToToman(data.collected) },
+          {
+            label: "شارژ و اصلاحات ثبت‌شدهٔ این ماه",
+            value: rialToToman(data.monthlyCharges),
+          },
+          {
+            label: "وصول این ماه",
+            value: rialToToman(data.monthlyCollections),
+          },
+          {
+            label: "بدهی ساختمان به تأمین‌کنندگان",
+            value: rialToToman(data.payable),
+          },
+          {
+            label: "واحدهای فعال",
+            value: digits(data.units.filter((u) => u.active).length),
+          },
+          {
+            label: "واحدهای فعال دارای ساکن",
+            value: digits(
+              data.units.filter((u) => u.active && u.occupancy === "OCCUPIED")
+                .length,
+            ),
+          },
+          {
+            label: "واحدهای فعال خالی",
+            value: digits(
+              data.units.filter((u) => u.active && u.occupancy === "VACANT")
+                .length,
+            ),
+          },
         ].map((s) => (
           <Card key={s.label} className="min-w-0 break-words">
             <p className="text-sm text-secondary">{s.label}</p>
@@ -33,6 +74,30 @@ export async function ManagementDashboard({ actor }: { actor: Actor }) {
           </Card>
         ))}
       </div>
+      <Card>
+        <h2 className="font-bold">ماندهٔ سررسید گذشته به تفکیک واحد</h2>
+        {data.units.some((u) => u.overdue > 0n) ? (
+          <ul className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {data.units
+              .filter((u) => u.overdue > 0n)
+              .map((u) => (
+                <li key={u.id}>
+                  <Link
+                    className="flex justify-between gap-2 rounded-lg bg-soft p-2 text-primary"
+                    href={`/management/units/${u.id}#statement`}
+                  >
+                    <span>واحد {u.number}</span>
+                    <strong>{rialToToman(u.overdue)}</strong>
+                  </Link>
+                </li>
+              ))}
+          </ul>
+        ) : (
+          <p className="mt-2 text-sm text-secondary">
+            ماندهٔ سررسید گذشته ثبت نشده است.
+          </p>
+        )}
+      </Card>
       <BuildingMap data={data} />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[

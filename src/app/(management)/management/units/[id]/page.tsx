@@ -1,5 +1,7 @@
 import { UnitContactForm } from "@/modules/units/components/contact-form";
-import { preferredUnitContact } from "@/modules/units/contacts";
+import Link from "next/link";
+import { UnitFinance } from "@/modules/billing/components/unit-finance";
+import { billingCandidate } from "@/modules/billing/responsibility";
 import { notFound } from "next/navigation";
 import { requireManager } from "@/modules/auth/session";
 import { db } from "@/lib/db";
@@ -29,7 +31,6 @@ export default async function Detail({
     take: 200,
     orderBy: { name: "asc" },
   });
-  const active = unit.memberships.filter((m) => !m.endsAt);
   const memberAccounts = await db.user.findMany({
     where: { id: { in: unit.memberships.map((m) => m.userId) } },
     select: { id: true, phone: true, status: true },
@@ -41,44 +42,58 @@ export default async function Detail({
       phone: c.phone,
     })),
   ];
-  for (const kind of ["OWNER", "TENANT"]) {
-    if (contacts.some((c) => c.kind === kind)) continue;
-    const member = active.find((m) => m.kind === kind);
-    const account = users.find((u) => u.id === member?.userId);
-    if (account)
-      contacts.push({ kind, name: account.name || "", phone: account.phone });
-  }
-  const preferred = preferredUnitContact(unit, contacts);
-
+  const payer = await billingCandidate(db, unit.id, new Date());
   return (
     <div className="min-w-0 space-y-6 break-words [&_select]:min-w-0 [&_select]:max-w-full [&_select]:w-full [&_form]:min-w-0 [&_label]:min-w-0">
       <h2 className="text-xl font-bold">واحد {unit.number}</h2>
+      <div className="flex flex-wrap gap-3">
+        <Link className="nav-extra bg-white text-primary" href="#statement">
+          حساب واحد
+        </Link>
+        <Link className="nav-extra bg-white text-primary" href="#charge">
+          ثبت بدهی
+        </Link>
+        <Link className="nav-extra bg-white text-primary" href="#payments">
+          پرداخت
+        </Link>
+        <Link
+          className="nav-extra bg-white text-primary"
+          href={`/management/communications?unit=${unit.id}#board-sms`}
+        >
+          پیامک
+        </Link>
+      </div>
+      <p>
+        {unit.occupancy === "OCCUPIED"
+          ? "دارای ساکن"
+          : unit.occupancy === "VACANT"
+            ? "خالی"
+            : "سکونت نامشخص"}{" "}
+        · {unit.active ? "فعال" : "غیرفعال"}
+      </p>
+      <p>
+        مسئول پرداخت:{" "}
+        {payer.assigned?.user.name ?? payer.member?.user.name ?? payer.issue}
+      </p>
+      <UnitFinance actor={actor} unitId={unit.id} />
       <Card>
-        <h3 className="mb-3 font-bold">تماس اصلی مالک و مستأجر</h3>
-        <p className="mb-5 text-sm leading-7 text-secondary">
-          اطلاعات هر دو نفر مستقل است. برای واحد فعالِ غیرخالی، شمارهٔ مستأجر در
-          اولویت تماس است؛ اگر موجود نباشد شمارهٔ مالک انتخاب می‌شود. این
-          اولویت، مسئول پرداخت را عوض نمی‌کند. تغییر تماس اصلی، ارتباط سایر
-          ساکنان را پایان نمی‌دهد؛ پایان سکونت باید جداگانه ثبت شود.
-        </p>
-        <p className="mb-5 text-sm">
-          تماس اصلی:{" "}
-          {preferred
-            ? `${preferred.name} · ${preferred.phone}`
-            : "شماره‌ای ثبت نشده است"}
-        </p>
-        <div className="grid gap-8 lg:grid-cols-2">
-          <UnitContactForm
-            unitId={unit.id}
-            kind="OWNER"
-            contact={contacts.find((c) => c.kind === "OWNER")}
-          />
-          <UnitContactForm
-            unitId={unit.id}
-            kind="TENANT"
-            contact={contacts.find((c) => c.kind === "TENANT")}
-          />
-        </div>
+        <details>
+          <summary className="mb-3 cursor-pointer font-bold">
+            ویرایش اطلاعات تماس مالک و مستأجر
+          </summary>
+          <div className="grid gap-8 lg:grid-cols-2">
+            <UnitContactForm
+              unitId={unit.id}
+              kind="OWNER"
+              contact={contacts.find((c) => c.kind === "OWNER")}
+            />
+            <UnitContactForm
+              unitId={unit.id}
+              kind="TENANT"
+              contact={contacts.find((c) => c.kind === "TENANT")}
+            />
+          </div>
+        </details>
       </Card>
       <Card>
         <h3 className="mb-3 font-bold">افزودن ساکن مستقل</h3>
@@ -171,8 +186,8 @@ export default async function Detail({
           </label>
         </ActionForm>
       </Card>
-      <Card>
-        <h3 className="mb-5 font-bold">ارتباط مالک، مستأجر یا نماینده</h3>
+      <Card id="occupants">
+        <h3 className="mb-5 font-bold">مالک، مستأجر و سایر افراد مرتبط</h3>
         {users.length ? (
           <ActionForm label="افزودن ارتباط">
             <input name="operation" type="hidden" value="membership" />
@@ -236,17 +251,18 @@ export default async function Detail({
       <Card>
         <h3 className="mb-2 font-bold">مسئول پرداخت شارژ</h3>
         <p className="page-description mb-5">
-          هر واحد تنها یک مسئول هم‌زمان دارد. با تغییر مسئول، سابقهٔ قبلی بسته و
-          حفظ می‌شود.
+          در حالت عادی، مستأجر فعال و در نبود مستأجر، مالک مسئول است. برای چند
+          مستأجر یا استثنا، مسئول تعیین کنید. برای رفع ابهام در صدور شارژ ماه
+          جاری یا گذشته، ماه موردنظر را وارد کنید.
         </p>
-        {active.length ? (
+        {unit.memberships.length ? (
           <ActionForm label="تعیین مسئول">
             <input name="operation" type="hidden" value="billing" />
             <input name="unitId" type="hidden" value={unit.id} />
             <label className="field">
               مسئول مجاز
               <select name="membershipId" required>
-                {active.map((m) => (
+                {unit.memberships.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.user.name} ·{" "}
                     {m.kind === "OWNER"
@@ -257,6 +273,14 @@ export default async function Detail({
                   </option>
                 ))}
               </select>
+            </label>
+            <label className="field">
+              ماه مشخص (اختیاری، سال-ماه)
+              <Input name="period" dir="ltr" maxLength={7} />
+            </label>
+            <label className="field">
+              دلیل تعیین مسئول
+              <Input name="reason" minLength={3} maxLength={500} required />
             </label>
           </ActionForm>
         ) : (

@@ -9,12 +9,10 @@ const isolated = await isolatedDatabase();
 process.env.DATABASE_URL = isolated.url;
 const { db } = await import("../src/lib/db");
 const { registerUnitResident } = await import("../src/modules/units/contacts");
-const { createPolicy, generateInvoices } = await import(
-  "../src/modules/billing/service"
-);
-const { currentPeriod, periodBounds } = await import(
-  "../src/modules/billing/calendar"
-);
+const { createPolicy, generateInvoices } =
+  await import("../src/modules/billing/service");
+const { currentPeriod, periodBounds } =
+  await import("../src/modules/billing/calendar");
 const origin = "http://localhost:3004";
 execFileSync(
   process.execPath,
@@ -107,6 +105,7 @@ const server = spawn(
       DEV_FIXED_OTP_ENABLED: "true",
       MEMBERS_ONLY_LOGIN: "false",
       PAYMENT_PROVIDER: "mock",
+      NOTIFICATION_SMS_PROVIDER: "development",
     },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
@@ -223,7 +222,18 @@ try {
     await combined.evaluate((el) => (el as HTMLElement).style.gridColumnEnd),
     "span 2",
   );
-  await expect(combined).toContainText("TEST Dr Manafi");
+  await expect(combined).not.toContainText("TEST Dr Manafi");
+  await expect(
+    page.getByText("TEST Dr Manafi", { exact: false }),
+  ).toBeVisible();
+  await combined.getByText("عملیات", { exact: true }).click();
+  await expect(
+    combined.getByRole("link", { name: "پرداخت 21", exact: true }),
+  ).toHaveAttribute("href", /#payments$/);
+  await expect(
+    combined.getByRole("link", { name: "پیامک 22", exact: true }),
+  ).toHaveAttribute("href", /#board-sms$/);
+  await combined.getByText("عملیات", { exact: true }).click();
   assert.equal(await page.locator('[data-unit-numbers="21"]').count(), 0);
   await expect(
     combined.getByRole("list", { name: "تفکیک ماندهٔ واحدها" }),
@@ -323,6 +333,37 @@ try {
     await db.invoice.findMany({ orderBy: { id: "asc" } }),
     invoiceSnapshot,
   );
+  await page.goto(origin + "/management/units/" + units.get("22") + "#charge");
+  const charge = form("ثبت سند بدهی");
+  await charge.locator('select[name="kind"]').selectOption("MISC");
+  await charge.locator('input[name="amount"]').fill("15000");
+  await charge.locator('input[name="reference"]').fill("E2E unit 22 charge");
+  await charge.locator('input[name="reason"]').fill("E2E miscellaneous debt");
+  await charge.getByRole("button").click();
+  await expect(charge.getByRole("status")).toBeVisible();
+  await expect(page.locator("#statement")).toContainText(
+    "E2E miscellaneous debt",
+  );
+
+  await page.getByRole("link", { name: "پیامک", exact: true }).click();
+  const sms = page.locator("#board-sms");
+  await expect(sms.locator('select[name="kind"]')).toHaveValue("UNIT");
+  await sms.getByRole("button", { name: "پیش‌نمایش گیرندگان" }).click();
+  await expect(sms.getByText("+989154000002", { exact: true })).toBeVisible();
+  assert.equal(
+    await db.outboxJob.count({ where: { kind: "COMM_BOARD_SMS" } }),
+    0,
+  );
+  await sms
+    .getByRole("button", { name: "تأیید ارسال به همین گیرندگان" })
+    .click();
+  await expect(sms.getByRole("status")).toContainText("صف ارسال");
+  assert.equal(
+    await db.outboxJob.count({ where: { kind: "COMM_BOARD_SMS" } }),
+    1,
+  );
+  await resident.goto(origin + "/management/communications");
+  await expect(resident.locator("#board-sms")).toHaveCount(0);
   assert.deepEqual(errors, []);
   console.info(
     "Dashboard browser acceptance passed: Unit 32 visible for admin without membership; independent residents; primary contact retained; physical order, merged card, common payer and ungrouping; resident unit switching/IDOR; pending isolation; 360/390/768/1440 RTL and bottom navigation. No real SMS or payments.",

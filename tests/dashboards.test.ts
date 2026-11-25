@@ -11,27 +11,22 @@ Object.assign(process.env, {
   PAYMENT_PROVIDER: "mock",
 });
 const { db } = await import("../src/lib/db");
-const { managementOverview, residentOverview, pendingOverview } = await import(
-  "../src/modules/dashboards/service"
-);
+const { managementOverview, residentOverview, pendingOverview } =
+  await import("../src/modules/dashboards/service");
 const {
   createPhysicalGroup,
   endPhysicalGroup,
   assignPhysicalGroupPayer,
   setUnitPosition,
 } = await import("../src/modules/building-layout/service");
-const { registerUnitResident, saveUnitContact } = await import(
-  "../src/modules/units/contacts"
-);
-const { createPolicy, generateInvoices } = await import(
-  "../src/modules/billing/service"
-);
-const { currentPeriod, periodBounds } = await import(
-  "../src/modules/billing/calendar"
-);
-const { startPayment, simulatePayment } = await import(
-  "../src/modules/payments/service"
-);
+const { registerUnitResident, saveUnitContact } =
+  await import("../src/modules/units/contacts");
+const { createPolicy, generateInvoices } =
+  await import("../src/modules/billing/service");
+const { currentPeriod, periodBounds } =
+  await import("../src/modules/billing/calendar");
+const { startPayment, simulatePayment } =
+  await import("../src/modules/payments/service");
 const { audienceUsers } = await import("../src/modules/notifications/common");
 type Actor = import("../src/lib/security/core").Actor;
 let admin: Actor,
@@ -537,5 +532,251 @@ test("additive layout migration preserves v7 units, invoices and posted ledger o
   } finally {
     await client.$disconnect();
     await clone.cleanup();
+  }
+});
+
+test("selected-unit debt, miscellaneous charges, partial payments, reversal and ledger reconciliation", async () => {
+  const { randomUUID } = await import("node:crypto");
+  const { recordUnitDebt, updateUnitDebt } =
+    await import("../src/modules/billing/unit-debt");
+  const { recordInvoicePayment } =
+    await import("../src/modules/payments/manual");
+  const { balance } = await import("../src/modules/accounting/service");
+  const current = currentPeriod();
+  const end = periodBounds(current).startsAt;
+  const month = currentPeriod(new Date(end.getTime() - 1));
+  const unitId = unitIds.get("21")!;
+  const baseline = await managementOverview(board);
+  const historical = {
+    id: randomUUID(),
+    unitId,
+    kind: "HISTORICAL" as const,
+    period: month,
+    reference: "migration batch 21",
+    description: "prior month unpaid",
+    amount: 500000n,
+  };
+  await assert.rejects(recordUnitDebt(a, historical));
+  const debt = await recordUnitDebt(board, historical);
+  await recordUnitDebt(board, historical);
+  await assert.rejects(
+    recordUnitDebt(board, {
+      ...historical,
+      id: randomUUID(),
+      reference: "another historical record",
+    }),
+  );
+  await assert.rejects(
+    recordUnitDebt(board, {
+      ...historical,
+      id: randomUUID(),
+      reference: "existing invoice",
+      period: current,
+    }),
+  );
+  await recordUnitDebt(board, {
+    ...historical,
+    id: randomUUID(),
+    kind: "OPENING",
+    reference: "opening journal",
+    amount: 300000n,
+  });
+  const misc = await recordUnitDebt(board, {
+    ...historical,
+    id: randomUUID(),
+    kind: "MISC",
+    period: current,
+    reference: "misc receipt 21",
+    amount: 200000n,
+  });
+  const account = await db.financialAccount.findFirstOrThrow();
+  const receipt = {
+    id: randomUUID(),
+    debtId: debt.id,
+    operation: "payment" as const,
+    reason: "Bank receipt 21",
+    amount: 250000n,
+    financialAccountId: account.id,
+  };
+  await updateUnitDebt(board, receipt);
+  await updateUnitDebt(board, receipt);
+  await assert.rejects(
+    updateUnitDebt(board, { ...receipt, id: randomUUID(), amount: 250001n }),
+  );
+  const adjustment = await updateUnitDebt(board, {
+    id: randomUUID(),
+    debtId: misc.id,
+    operation: "decrease",
+    amount: 100000n,
+    reason: "credit approved",
+  });
+  await updateUnitDebt(board, {
+    id: randomUUID(),
+    debtId: misc.id,
+    operation: "reverse",
+    entryId: adjustment.id,
+    reason: "reverse credit",
+  });
+  const invoice = await db.invoice.findFirstOrThrow({
+    where: { unitId: unitIds.get("22")! },
+  });
+  const manual = {
+    id: randomUUID(),
+    invoiceId: invoice.id,
+    financialAccountId: account.id,
+    amount: 100000n,
+    reason: "Bank receipt INV21",
+  };
+  await recordInvoicePayment(board, manual);
+  await recordInvoicePayment(board, manual);
+  const updated = await managementOverview(board);
+  assert.equal(updated.outstanding, await balance(db, "AR"));
+  assert.equal(updated.otherReceivables - baseline.otherReceivables, 750000n);
+  assert.equal(
+    updated.monthlyCollections - baseline.monthlyCollections,
+    350000n,
+  );
+  assert.equal(
+    updated.units.find((u) => u.number === "21")!.outstanding -
+      baseline.units.find((u) => u.number === "21")!.outstanding,
+    750000n,
+  );
+  assert.equal(
+    updated.units.find((u) => u.number === "22")!.outstanding,
+    baseline.units.find((u) => u.number === "22")!.outstanding - 100000n,
+  );
+  assert.ok(updated.units.find((u) => u.number === "21")!.overdue > 0n);
+  await assert.rejects(
+    db.unitDebt.update({
+      where: { id: debt.id },
+      data: { description: "overwrite" },
+    }),
+  );
+});
+
+test("billing falls back to the sole tenant or owner and requires an explicit designation for ambiguity", async () => {
+  const { billingCandidate, designatePayerForPeriod } =
+    await import("../src/modules/billing/responsibility");
+  const { assignBilling } = await import("../src/modules/units/service");
+  const building = await db.building.findUniqueOrThrow({
+    where: { key: "delta" },
+  });
+  const unit = await db.unit.create({
+    data: { number: "56", floor: "5", buildingId: building.id },
+  });
+  const startsAt = periodBounds(currentPeriod()).startsAt;
+  await db.unitMembership.create({
+    data: { unitId: unit.id, userId: owner.id, startsAt, kind: "OWNER" },
+  });
+  assert.equal(
+    (await billingCandidate(db, unit.id, new Date())).member?.userId,
+    owner.id,
+  );
+  const tenant = await db.unitMembership.create({
+    data: { unitId: unit.id, userId: a.id, startsAt, kind: "TENANT" },
+  });
+  assert.equal(
+    (await billingCandidate(db, unit.id, new Date())).member?.userId,
+    a.id,
+  );
+  await db.unitMembership.create({
+    data: { unitId: unit.id, userId: b.id, startsAt, kind: "TENANT" },
+  });
+  await assert.rejects(generateInvoices(board, currentPeriod()), /چند عضو/);
+  await db.unitMembership.updateMany({
+    where: { unitId: unit.id, userId: b.id },
+    data: { endsAt: new Date() },
+  });
+  await assignBilling(board, unit.id, tenant.id);
+  assert.equal(
+    (await billingCandidate(db, unit.id, new Date())).assigned?.userId,
+    a.id,
+  );
+  const second = await db.unit.create({
+    data: { number: "57", floor: "5", buildingId: building.id },
+  });
+  await db.unitMembership.create({
+    data: { unitId: second.id, userId: a.id, startsAt, kind: "TENANT" },
+  });
+  await designatePayerForPeriod(board, {
+    unitId: unit.id,
+    membershipId: tenant.id,
+    period: currentPeriod(),
+    reason: "Tenant designated for this cutoff",
+  });
+  await generateInvoices(board, currentPeriod());
+  assert.equal(
+    (await db.invoice.findFirstOrThrow({ where: { unitId: unit.id } }))
+      .responsibleId,
+    a.id,
+  );
+  assert.equal(
+    (await db.invoice.findFirstOrThrow({ where: { unitId: second.id } }))
+      .responsibleId,
+    a.id,
+  );
+});
+
+test("board SMS selects and deduplicates recipients and only dispatches confirmed previews in simulation", async () => {
+  const {
+    boardRecipients,
+    previewBoardSms,
+    confirmBoardSms,
+    dispatchBoardSms,
+  } = await import("../src/modules/sms/board");
+  const tenant = await db.user.findUniqueOrThrow({ where: { id: a.id } });
+  const owners = await boardRecipients(board, { kind: "OWNER", selected: [] });
+  const tenants = await boardRecipients(board, {
+    kind: "TENANT",
+    selected: [],
+  });
+  assert.ok(owners.length > 0);
+  assert.equal(tenants.filter((phone) => phone === tenant.phone).length, 1);
+  assert.ok(
+    (
+      await boardRecipients(board, {
+        kind: "UNIT",
+        selected: [unitIds.get("32")!],
+      })
+    ).includes(tenant.phone),
+  );
+  assert.ok(
+    (await boardRecipients(board, { kind: "FLOOR", selected: ["3"] })).includes(
+      tenant.phone,
+    ),
+  );
+  assert.deepEqual(
+    await boardRecipients(board, { kind: "CONTACT", selected: [a.id] }),
+    [tenant.phone],
+  );
+  assert.ok(
+    (await boardRecipients(board, { kind: "DEBT", selected: [] })).length > 0,
+  );
+  await assert.rejects(boardRecipients(a, { kind: "ALL", selected: [] }));
+  const input = { kind: "CONTACT" as const, selected: [a.id] };
+  const preview = await previewBoardSms(board, input);
+  process.env.NOTIFICATION_SMS_PROVIDER = "development";
+  try {
+    await assert.rejects(
+      confirmBoardSms(board, input, { ...preview, signature: "forged" }),
+    );
+    await confirmBoardSms(board, input, preview);
+    await confirmBoardSms(board, input, preview);
+    const jobs = await db.outboxJob.findMany({
+      where: { kind: "COMM_BOARD_SMS" },
+    });
+    assert.equal(jobs.length, 1);
+    await dispatchBoardSms(jobs[0].payload as Record<string, unknown>);
+    await dispatchBoardSms(jobs[0].payload as Record<string, unknown>);
+    const records = await db.auditLog.findMany({
+      where: { action: "sms.board.result" },
+    });
+    assert.equal(records.length, 1);
+    assert.equal(
+      (records[0].details as { status: string }).status,
+      "SIMULATED",
+    );
+  } finally {
+    delete process.env.NOTIFICATION_SMS_PROVIDER;
   }
 });

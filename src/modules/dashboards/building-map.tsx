@@ -35,16 +35,6 @@ export function BuildingMap({ data }: { data: ManagementOverview }) {
               group,
               position,
               span: units.length,
-              peopleSummary: [
-                ...new Set(
-                  units.flatMap((u) =>
-                    [...u.people, ...u.contacts].map(
-                      (p) =>
-                        `${p.kind === "OWNER" ? "مالک" : p.kind === "TENANT" ? "مستأجر" : "نماینده"}: ${p.name}`,
-                    ),
-                  ),
-                ),
-              ],
             },
           ];
         });
@@ -59,7 +49,7 @@ export function BuildingMap({ data }: { data: ManagementOverview }) {
               className="grid grid-cols-3 gap-2 sm:gap-4 items-stretch"
               dir="rtl"
             >
-              {cards.map(({ units, group, position, span, peopleSummary }) => (
+              {cards.map(({ units, group, position, span }) => (
                 <article
                   key={group?.id || units[0].id}
                   data-unit-card
@@ -68,14 +58,14 @@ export function BuildingMap({ data }: { data: ManagementOverview }) {
                     gridColumn: `${((position - 1) % 3) + 1} / span ${span}`,
                     gridRow: Math.floor((position - 1) / 3) + 1,
                   }}
-                  className="relative min-w-0 break-words rounded-xl border border-border bg-white p-2 sm:p-4"
+                  className="min-w-0 rounded-xl border border-border bg-white p-2 sm:p-3"
                 >
                   <h4
                     dir="ltr"
                     className="font-bold text-primary text-sm sm:text-lg"
                   >
                     <Link
-                      className="after:absolute after:inset-0 focus-visible:outline-2 focus-visible:outline-primary"
+                      className="focus-visible:outline-2 focus-visible:outline-primary"
                       href={
                         group
                           ? `/management#physical-group-${group.id}`
@@ -87,9 +77,6 @@ export function BuildingMap({ data }: { data: ManagementOverview }) {
                   </h4>
                   {group && (
                     <Badge>گروه فیزیکی · {digits(span)} واحد مالی مستقل</Badge>
-                  )}
-                  {group?.occupantLabel && (
-                    <p className="mt-2 text-sm">{group.occupantLabel}</p>
                   )}
                   <div className="mt-2 flex flex-wrap gap-1">
                     {units.map((u) => (
@@ -115,23 +102,6 @@ export function BuildingMap({ data }: { data: ManagementOverview }) {
                     ))}
                   </div>
                   <div className="mt-3 space-y-2 text-xs sm:text-sm">
-                    <p className="line-clamp-3 text-secondary">
-                      {peopleSummary.join("، ") || "ساکن معرفی نشده است"}
-                    </p>
-                    {units.map((u) => (
-                      <div key={u.id}>
-                        {u.pending > 0 && (
-                          <p className="text-amber-800">
-                            {digits(u.pending)} عضو با دسترسی غیرفعال
-                          </p>
-                        )}
-                        {!u.hasPayer && u.active && (
-                          <p className="text-amber-800">
-                            مسئول پرداخت تعیین نشده
-                          </p>
-                        )}
-                      </div>
-                    ))}
                     <p
                       className={
                         units.some((u) => u.outstanding > 0n)
@@ -153,15 +123,40 @@ export function BuildingMap({ data }: { data: ManagementOverview }) {
                         ))}
                       </ul>
                     )}
-                    {units.map((u) => (
-                      <Link
-                        key={u.id}
-                        href={`/management/units/${u.id}`}
-                        className="relative z-10 block min-h-11 py-2 font-medium text-primary underline"
-                      >
-                        جزئیات واحد {u.number}
-                      </Link>
-                    ))}
+                    <details>
+                      <summary className="min-h-10 cursor-pointer py-2 font-medium text-primary">
+                        عملیات
+                      </summary>
+                      {units.map((u) => (
+                        <nav
+                          key={u.id}
+                          aria-label={`عملیات واحد ${u.number}`}
+                          className="flex flex-wrap gap-x-2"
+                        >
+                          {[
+                            ["#statement", "حساب"],
+                            ["#charge", "بدهی"],
+                            ["#payments", "پرداخت"],
+                            ["", "جزئیات"],
+                          ].map(([anchor, label]) => (
+                            <Link
+                              key={label}
+                              className="inline-flex min-h-9 items-center text-primary underline"
+                              href={`/management/units/${u.id}${anchor}`}
+                            >
+                              {label}
+                              {group ? " " + u.number : ""}
+                            </Link>
+                          ))}
+                          <Link
+                            className="inline-flex min-h-9 items-center text-primary underline"
+                            href={`/management/communications?unit=${u.id}#board-sms`}
+                          >
+                            پیامک{group ? " " + u.number : ""}
+                          </Link>
+                        </nav>
+                      ))}
+                    </details>
                   </div>
                 </article>
               ))}
