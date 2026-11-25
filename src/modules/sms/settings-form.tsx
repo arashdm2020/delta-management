@@ -20,7 +20,7 @@ type Template = {
   enabled: boolean;
   variableMapping: Record<string, string>;
   description: string;
-  updatedAt: string;
+  updatedAt: string | null;
   administrator: string;
 };
 type Schedule = {
@@ -105,13 +105,19 @@ function PatternEditor({ template }: { template: Template }) {
         فعال‌سازی این رویداد
       </label>
       <p className="text-xs text-secondary">
-        آخرین تغییر:{" "}
-        {new Intl.DateTimeFormat("fa-IR", {
-          dateStyle: "medium",
-          timeStyle: "short",
-          timeZone: "Asia/Tehran",
-        }).format(new Date(template.updatedAt))}{" "}
-        · {template.administrator}
+        {template.updatedAt ? (
+          <>
+            آخرین تغییر:{" "}
+            {new Intl.DateTimeFormat("fa-IR", {
+              dateStyle: "medium",
+              timeStyle: "short",
+              timeZone: "Asia/Tehran",
+            }).format(new Date(template.updatedAt))}{" "}
+            · {template.administrator}
+          </>
+        ) : (
+          "هنوز پترنی برای این رویداد ثبت نشده است."
+        )}
       </p>
       <Result state={state} />
       <Button disabled={pending}>
@@ -136,7 +142,18 @@ export function SmsSettingsForm({
   );
   const [filter, setFilter] = useState("all");
   const [selected, setSelected] = useState<SmsEventKey>("auth.otp");
-  const selectedTemplate = templates.find((t) => t.eventKey === selected)!;
+  const savedTemplates = new Map(templates.map((row) => [row.eventKey, row]));
+  const templateFor = (key: SmsEventKey): Template =>
+    savedTemplates.get(key) ?? {
+      eventKey: key,
+      providerCode: null,
+      enabled: false,
+      variableMapping: {},
+      description: "",
+      updatedAt: null,
+      administrator: "",
+    };
+  const selectedTemplate = templateFor(selected);
   return (
     <div className="space-y-6">
       <div className="grid gap-6 xl:grid-cols-2">
@@ -237,7 +254,7 @@ export function SmsSettingsForm({
                 (key) => filter === "all" || smsEvents[key].category === filter,
               )
               .map((key) => {
-                const row = templates.find((t) => t.eventKey === key)!;
+                const row = templateFor(key);
                 const variables = requiredVariables(key);
                 const valid =
                   Boolean(row.providerCode) &&
