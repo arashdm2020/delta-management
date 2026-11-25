@@ -1,5 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
+import { designatePayerForPeriod } from "@/modules/billing/responsibility";
+import { reasonSchema } from "@/modules/billing/schemas";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -131,9 +133,24 @@ export async function manageAction(
       case "membership-end":
         await endMember(actor, value("id"));
         break;
-      case "billing":
-        await assignBilling(actor, value("unitId"), value("membershipId"));
+      case "billing": {
+        const reason = reasonSchema.parse(value("reason"));
+        if (value("period"))
+          await designatePayerForPeriod(actor, {
+            unitId: value("unitId"),
+            membershipId: value("membershipId"),
+            period: value("period"),
+            reason,
+          });
+        else
+          await assignBilling(
+            actor,
+            value("unitId"),
+            value("membershipId"),
+            reason,
+          );
         break;
+      }
       case "board":
         await requireSuperAdmin();
         await assignBoard(actor, {

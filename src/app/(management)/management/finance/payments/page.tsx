@@ -25,14 +25,25 @@ export default async function PaymentRecords() {
             <dl className="grid gap-3 text-sm">
               <div>مسئول صورتحساب: {p.invoice.responsibleName}</div>
               <div>ایجاد: {jalaliTime(p.createdAt)}</div>
-              <div>درگاه: {p.provider === "mock" ? "آزمایشی" : p.provider}</div>
-              <div className="break-all">شناسه داخلی: {p.id}</div>
-              <div className="break-all">
-                شناسه تأییدشده درگاه:{" "}
-                {p.providerTransactionId || "هنوز تأیید نشده"}
+              <div>
+                روش دریافت:{" "}
+                {p.provider === "manual"
+                  ? "ثبت بانکی توسط مدیریت"
+                  : p.provider === "mock"
+                    ? "آزمایشی"
+                    : p.provider}
               </div>
+              <div className="break-all">شناسه داخلی: {p.id}</div>
+              {p.provider !== "manual" && (
+                <div className="break-all">
+                  شناسه تأییدشده درگاه:{" "}
+                  {p.providerTransactionId || "هنوز تأیید نشده"}
+                </div>
+              )}
               {p.verifiedAt && <div>تأیید: {jalaliTime(p.verifiedAt)}</div>}
-              {p.settlement ? (
+              {p.provider === "manual" ? (
+                <div>دریافت در دفتر بانک ثبت شده است.</div>
+              ) : p.settlement ? (
                 <div className="space-y-2">
                   <p>تسویه بانکی: {jalaliTime(p.settlement.settledAt)}</p>
                   <p>

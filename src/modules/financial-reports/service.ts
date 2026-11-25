@@ -1,3 +1,7 @@
+import {
+  receivableEntries,
+  summarizeReceivables,
+} from "@/modules/accounting/receivables";
 import { db } from "@/lib/db";
 import { type Actor, canManage } from "@/lib/security/core";
 import { member, manager, balance } from "@/modules/accounting/service";
@@ -99,23 +103,14 @@ export async function dashboard(actor: Actor, key = currentPeriod()) {
       const issued = invoices
         .filter((i) => i.status !== "CANCELLED")
         .reduce((a, i) => a + invoiceTotal(i), 0n);
-      const collected =
-        (
-          await tx.paymentIntent.aggregate({
-            where: {
-              status: "VERIFIED",
-              verifiedAt: { gte: bounds.startsAt, lt: bounds.endsAt },
-            },
-            _sum: { amount: true },
-          })
-        )._sum.amount || 0n;
-      const allInvoices = await tx.invoice.findMany({
-        include: { corrections: true, allocations: true },
-      });
-      const receivables = allInvoices.reduce(
-        (a, i) => a + invoiceState(i).outstanding,
-        0n,
+      const posted = summarizeReceivables(
+        await receivableEntries(tx),
+        bounds.startsAt,
+        bounds.endsAt,
+        new Date(),
       );
+      const collected = posted.monthlyCollections;
+      const receivables = posted.outstanding;
       const expenses = await tx.journalLine.aggregate({
         where: {
           accountCode: { in: ["EXPENSE", "FEES"] },

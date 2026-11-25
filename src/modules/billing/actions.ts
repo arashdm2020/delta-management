@@ -28,6 +28,8 @@ import {
 import { recordIncome, reverseIncome } from "@/modules/accounting/income";
 import { openingBalance } from "@/modules/accounting/service";
 import { parseJalaliDate } from "./calendar";
+import { recordInvoicePayment } from "@/modules/payments/manual";
+import { debtKind, recordUnitDebt, updateUnitDebt } from "./unit-debt";
 import { queueBilling } from "./jobs";
 import { tomanSchema, reasonSchema, normalizeDigits } from "./schemas";
 export type FinanceResult = { ok: boolean; message: string };
@@ -42,6 +44,45 @@ export async function financeAction(
   const id = (key = "id") => z.uuid().parse(value(key));
   try {
     switch (value("operation")) {
+      case "unit-debt":
+        await recordUnitDebt(actor, {
+          id: id("requestKey"),
+          unitId: id("unitId"),
+          kind: debtKind.parse(value("kind")),
+          period: value("period"),
+          reference: value("reference"),
+          description: value("reason"),
+          amount: tomanSchema.parse(value("amount")),
+        });
+        break;
+      case "unit-debt-update": {
+        const operation = z
+          .enum(["payment", "increase", "decrease", "reverse"])
+          .parse(value("direction"));
+        await updateUnitDebt(actor, {
+          id: id("requestKey"),
+          debtId: id(),
+          operation,
+          reason: value("reason"),
+          amount:
+            operation === "reverse"
+              ? undefined
+              : tomanSchema.parse(value("amount")),
+          entryId: operation === "reverse" ? id("entryId") : undefined,
+          financialAccountId:
+            operation === "payment" ? id("financialAccountId") : undefined,
+        });
+        break;
+      }
+      case "manual-payment":
+        await recordInvoicePayment(actor, {
+          id: id("requestKey"),
+          invoiceId: id(),
+          financialAccountId: id("financialAccountId"),
+          amount: tomanSchema.parse(value("amount")),
+          reason: value("reason"),
+        });
+        break;
       case "policy":
         await createPolicy(
           actor,

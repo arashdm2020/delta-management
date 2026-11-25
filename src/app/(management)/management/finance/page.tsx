@@ -161,7 +161,12 @@ export default async function Finance({
             )}
             <label className="field">
               {policies.length ? "دلیل تغییر" : "توضیح ثبت اولیه (اختیاری)"}
-              <Input name="reason" minLength={3} maxLength={500} required={policies.length > 0} />
+              <Input
+                name="reason"
+                minLength={3}
+                maxLength={500}
+                required={policies.length > 0}
+              />
             </label>
           </FinanceForm>
           <p className="mt-4 text-xs leading-6 text-secondary">
@@ -289,13 +294,17 @@ export default async function Finance({
         </Card>
         <Card>
           <h3 className="mb-4 text-lg font-bold">ثبت تسویه تأییدشده با بانک</h3>
-          {payments.some((p) => !settled.has(p.id)) ? (
+          {payments.some(
+            (p) => p.provider !== "manual" && !settled.has(p.id),
+          ) ? (
             <FinanceForm operation="settle" label="تأیید تسویه بانکی">
               <label className="field">
                 پرداخت تأییدشده
                 <select name="id">
                   {payments
-                    .filter((p) => !settled.has(p.id))
+                    .filter(
+                      (p) => p.provider !== "manual" && !settled.has(p.id),
+                    )
                     .map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.id.slice(0, 8)} · {rialToToman(p.amount)}

@@ -246,7 +246,11 @@ export async function reconcile(
     const intent = await tx.paymentIntent.findUniqueOrThrow({
       where: { id: intentId },
     });
-    if (intent.status !== "VERIFIED" || fee >= intent.amount)
+    if (
+      intent.status !== "VERIFIED" ||
+      intent.provider === "manual" ||
+      fee >= intent.amount
+    )
       fail("پرداخت تأییدشده و کارمزد معتبر لازم است.");
     const account = await tx.financialAccount.findUniqueOrThrow({
       where: { id: financialAccountId },

@@ -1,3 +1,4 @@
+import { snapshotBillingPayer } from "./responsibility";
 import { queueEvent } from "@/modules/notifications/service";
 import { db } from "@/lib/db";
 import { type Actor, fail } from "@/lib/security/core";
@@ -26,7 +27,11 @@ export async function createPolicy(
     const previous = await tx.chargePolicy.findFirst({
       orderBy: { startsAt: "desc" },
     });
-    const reason = previous ? reasonSchema.parse(rawReason) : (rawReason.trim() ? reasonSchema.parse(rawReason) : "ثبت اولیهٔ شارژ");
+    const reason = previous
+      ? reasonSchema.parse(rawReason)
+      : rawReason.trim()
+        ? reasonSchema.parse(rawReason)
+        : "ثبت اولیهٔ شارژ";
     if (previous) {
       const minutes = approvalMinutesId
         ? await tx.meetingMinutes.findUnique({
@@ -107,6 +112,17 @@ export async function generateInvoices(actor: Actor, key: string) {
       if (!units.length) fail("واحد فعالی ثبت نشده است.");
       let created = 0;
       for (const unit of units) {
+        await lock(tx, unit.id);
+        if (
+          await tx.unitDebt.findFirst({
+            where: {
+              unitId: unit.id,
+              periodKey: bounds.key,
+              kind: "HISTORICAL",
+            },
+          })
+        )
+          continue;
         if (
           await tx.invoice.findUnique({
             where: {
@@ -115,19 +131,12 @@ export async function generateInvoices(actor: Actor, key: string) {
           })
         )
           continue;
-        await lock(tx, unit.id);
-        const responsibility = await tx.billingResponsibility.findFirst({
-          where: {
-            unitId: unit.id,
-            startsAt: { lte: bounds.startsAt },
-            OR: [{ endsAt: null }, { endsAt: { gt: bounds.startsAt } }],
-          },
-          include: { user: true },
-        });
-        if (!responsibility)
-          return fail(
-            `واحد ${unit.number}: مسئول مالی در ابتدای ماه تعیین نشده است.`,
-          );
+        const responsibility = await snapshotBillingPayer(
+          tx,
+          actor,
+          unit,
+          bounds.startsAt,
+        );
         const invoice = await tx.invoice.create({
           data: {
             unitId: unit.id,

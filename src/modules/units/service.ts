@@ -136,12 +136,13 @@ export async function assignBilling(
   actor: Actor,
   unitId: string,
   membershipId: string,
+  reason?: string,
 ) {
   authorize(actor);
   uuid.parse(unitId);
   uuid.parse(membershipId);
   return db.$transaction(async (tx) => {
-    return assignBillingIn(tx, actor, unitId, membershipId);
+    return assignBillingIn(tx, actor, unitId, membershipId, reason);
   });
 }
 export async function assignBillingIn(
@@ -149,6 +150,7 @@ export async function assignBillingIn(
   actor: Actor,
   unitId: string,
   membershipId: string,
+  reason?: string,
 ) {
   authorize(actor);
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${unitId}))`;
@@ -177,7 +179,13 @@ export async function assignBillingIn(
   const assignment = await tx.billingResponsibility.create({
     data: { unitId, membershipId, userId: member.userId, startsAt: now },
   });
-  await audit("billing.assign", actor.id, assignment.id, {}, tx);
+  await audit(
+    "billing.assign",
+    actor.id,
+    assignment.id,
+    { reason: reason ?? null },
+    tx,
+  );
   return assignment;
 }
 export async function visibleUnit(actor: Actor, id: string) {

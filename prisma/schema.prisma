@@ -820,3 +820,17 @@ model SmsReminderPolicy {
   updatedById   String?  @db.Uuid
   updatedAt     DateTime @updatedAt @db.Timestamptz(3)
 }
+
+model UnitDebt {
+  id         String   @id @db.Uuid
+  unitId     String   @db.Uuid
+  periodKey  String   @db.VarChar(7)
+  kind       String   @db.VarChar(20)
+  reference  String   @db.VarChar(100)
+  description String  @db.VarChar(300)
+  dueAt      DateTime @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([unitId, reference])
+  @@index([unitId, periodKey])
+}
