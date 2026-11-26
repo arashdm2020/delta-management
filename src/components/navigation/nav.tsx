@@ -18,11 +18,13 @@ import {
 const resident = [
   { href: "/home", label: "خانه", icon: Home },
   { href: "/charges", label: "شارژ", icon: Wallet },
+  { href: "/inbox", label: "پیام‌ها", icon: MessagesSquare },
   { href: "/announcements", label: "اطلاعیه‌ها", icon: MessagesSquare },
   { href: "/requests", label: "درخواست‌ها", icon: ClipboardList },
   { href: "/profile", label: "پروفایل", icon: UserRound },
 ];
 const management = [
+  { href: "/inbox", label: "صندوق پیام‌ها", icon: MessagesSquare },
   {
     href: "/management/communications",
     label: "ارتباطات",
@@ -52,7 +54,12 @@ export function Navigation({
   mobile?: boolean;
 }) {
   const path = usePathname();
-  const items = mode === "management" ? management : resident;
+  const items =
+    mode === "management"
+      ? management
+      : mobile
+        ? resident.filter((item) => item.href !== "/announcements")
+        : resident;
   const isActive = (href: string) =>
     path === href || (href !== "/management" && path.startsWith(href + "/"));
   return (
@@ -106,7 +113,6 @@ export function DesktopExtra({ manager }: { manager: boolean }) {
       <Link className="nav-extra" href="/meetings">
         جلسات ساختمان
       </Link>
-      <Link className="nav-extra" href="/inbox">صندوق پیام‌ها</Link>
       <Link className="nav-extra" href="/notifications">
         مرکز اعلان‌ها
       </Link>

@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import { randomUUID } from "node:crypto";
 import Link from "next/link";
 import { z } from "zod";
@@ -41,21 +42,34 @@ export default async function Inbox({
       : [],
   ]);
   return (
-    <div className="mx-auto max-w-4xl space-y-5 p-4">
+    <div className="mx-auto max-w-4xl space-y-6">
       <div className="flex justify-between">
         <h1 className="page-heading">صندوق پیام‌ها</h1>
-        <Link href="/home">بازگشت</Link>
+        <Link className="nav-extra bg-primary text-white" href="#compose">
+          پیام جدید
+        </Link>
       </div>
-      <ul>
-        {roots.map((row) => (
-          <li key={row.id}>
-            <Link href={`/inbox?thread=${row.id}`}>
-              {row.senderId === actor.id ? "ارسالی" : "دریافتی"} ·{" "}
-              {row.body.slice(0, 75)}
-            </Link>
-          </li>
-        ))}
-      </ul>
+      <section
+        aria-label="گفتگوها"
+        className="rounded-2xl border border-border bg-white p-5"
+      >
+        <h2 className="mb-3 font-bold">گفتگوهای من</h2>
+        {!roots.length && (
+          <p className="text-secondary">
+            هنوز گفتگویی ندارید. از فرم زیر برای ارسال پیام استفاده کنید.
+          </p>
+        )}
+        <ul className="divide-y divide-border">
+          {roots.map((row) => (
+            <li key={row.id} className="py-3">
+              <Link href={`/inbox?thread=${row.id}`}>
+                {row.senderId === actor.id ? "ارسالی" : "دریافتی"} ·{" "}
+                {row.body.slice(0, 75)}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
       {messages.length > 0 && (
         <section className="space-y-2">
           <form action={readInbox}>
@@ -72,25 +86,42 @@ export default async function Inbox({
               </small>
             </article>
           ))}
-          <form action={sendInbox} className="grid gap-2">
+          <form
+            action={sendInbox}
+            className="grid gap-4 rounded-2xl border border-border bg-white p-5"
+          >
             <input type="hidden" name="requestId" value={randomUUID()} />
             <input type="hidden" name="thread" value={selected.data} />
             <label>
               پاسخ
               <textarea
-                className="block w-full border"
+                className="mt-2 min-h-32 w-full rounded-xl border border-input bg-white p-3 focus:outline-2 focus:outline-primary"
                 name="body"
                 required
                 maxLength={4000}
               />
             </label>
-            <button>ارسال پاسخ</button>
+            <Button type="submit">ارسال پاسخ</Button>
           </form>
         </section>
       )}
-      <form action={sendInbox} className="grid gap-3 rounded border p-3">
+      <form
+        id="compose"
+        action={sendInbox}
+        className="scroll-mt-6 grid gap-4 rounded-2xl border border-border bg-white p-5"
+      >
+        {!canManage(actor) && (
+          <p className="text-sm text-secondary">
+            پیام شما به هیئت‌مدیره و مدیر سامانه می‌رسد؛ پاسخ را در همین صندوق
+            می‌بینید.
+          </p>
+        )}
         <input type="hidden" name="requestId" value={randomUUID()} />
-        <h2>پیام جدید</h2>
+        <h2 className="text-lg font-bold">
+          {canManage(actor)
+            ? "ارسال پیام به ساکنان یا هیئت‌مدیره"
+            : "ارسال پیام به هیئت‌مدیره"}
+        </h2>
         <label>
           مخاطب{" "}
           <select name="kind">
@@ -136,13 +167,15 @@ export default async function Inbox({
         <label>
           متن پیام
           <textarea
-            className="block w-full border"
+            className="mt-2 min-h-32 w-full rounded-xl border border-input bg-white p-3 focus:outline-2 focus:outline-primary"
             name="body"
             required
             maxLength={4000}
           />
         </label>
-        <button>ارسال</button>
+        <Button type="submit">
+          {canManage(actor) ? "ارسال پیام" : "ارسال به هیئت‌مدیره"}
+        </Button>
       </form>
     </div>
   );
