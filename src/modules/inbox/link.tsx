@@ -1,42 +1,23 @@
 "use client";
-import { useEffect, useState } from "react";
-import { Bell } from "lucide-react";
+import { Bell, Mail } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-
+import { MailBadge, useMailCounts } from "./counts";
 export function InboxLink({
   initialNotifications,
 }: {
   initialNotifications: number;
 }) {
-  const [count, setCount] = useState(0);
-  const [notifications, setNotifications] = useState(initialNotifications);
-  const router = useRouter();
-  const path = usePathname();
-  useEffect(() => {
-    const source = new EventSource("/api/inbox/events");
-    let previous: string | undefined;
-    source.onmessage = (event) => {
-      const next = JSON.parse(event.data) as {
-        inbox: number;
-        notifications: number;
-      };
-      setCount(next.inbox);
-      setNotifications(next.notifications);
-      if (
-        previous !== undefined &&
-        previous !== event.data &&
-        (path === "/inbox" || path === "/notifications")
-      )
-        router.refresh();
-      previous = event.data;
-    };
-    return () => source.close();
-  }, [path, router]);
+  const { notifications } = useMailCounts();
+  void initialNotifications;
   return (
     <>
-      <Link className="nav-extra whitespace-nowrap" href="/inbox">
-        پیام‌ها {count > 0 && <span>({count})</span>}
+      <Link
+        className="nav-extra flex items-center gap-2 whitespace-nowrap"
+        href="/inbox"
+        aria-label="صندوق پیام‌ها"
+      >
+        <Mail size={19} />
+        <MailBadge />
       </Link>
       <Link
         className="relative grid size-11 place-items-center rounded-full bg-white text-primary"

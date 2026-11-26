@@ -16,6 +16,9 @@ export async function sendInbox(form: FormData) {
   const body = z.string().trim().min(1).max(4000).parse(form.get("body"));
   const requestId = z.uuid().parse(form.get("requestId"));
   const thread = form.get("thread");
+  const subject = thread
+    ? null
+    : z.string().trim().min(1).max(200).parse(form.get("subject"));
   const kind = z
     .enum(["USER", "UNIT", "FLOOR", "ROLE", "ALL", "BOARD"])
     .parse(form.get("kind") || "BOARD");
@@ -28,6 +31,8 @@ export async function sendInbox(form: FormData) {
       await lock(tx, "inbox:" + actor.id + ":" + requestId);
       await rateLimit(tx, actor.id, "inbox");
       let ids: string[];
+      let threadSubject = subject;
+      let audienceLabel: string | null = null;
       if (thread) {
         const root = await tx.inboxMessage.findFirst({
           where: {
@@ -36,6 +41,8 @@ export async function sendInbox(form: FormData) {
           },
         });
         if (!root || root.threadId !== root.id) return fail("گفتگو یافت نشد.");
+        threadSubject = root.subject;
+        audienceLabel = root.audienceLabel;
         const recipientId =
           root.senderId === actor.id ? root.recipientId : root.senderId;
         const recipient = await tx.user.findFirst({
@@ -85,6 +92,25 @@ export async function sendInbox(form: FormData) {
         });
         ids = users.map((u) => u.id).filter((id) => id !== actor.id);
       }
+      if (!thread) {
+        audienceLabel =
+          kind === "UNIT"
+            ? "واحد " + target
+            : kind === "FLOOR"
+              ? "طبقه " + target
+              : kind === "BOARD"
+                ? "هیئت‌مدیره و مدیریت"
+                : kind === "ALL"
+                  ? "همه کاربران"
+                  : kind === "ROLE"
+                    ? ({
+                        OWNER: "مالکان",
+                        TENANT: "مستأجران",
+                        BOARD_MEMBER: "هیئت‌مدیره",
+                        SUPER_ADMIN: "مدیر سامانه",
+                      }[target] ?? target)
+                    : null;
+      }
       if (!ids.length)
         return fail(
           "برای این مخاطب، حساب تأییدشده و مرتبطی پیدا نشد. ابتدا عضویت ساکن در واحد و وضعیت تأیید حساب را بررسی کنید.",
@@ -101,13 +127,26 @@ export async function sendInbox(form: FormData) {
         const id = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-8${hash.slice(13, 16)}-8${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
         const prior = await tx.inboxMessage.findUnique({ where: { id } });
         if (prior) {
-          if (prior.body !== body || prior.threadId !== (thread || id))
+          if (
+            prior.body !== body ||
+            prior.threadId !== (thread || id) ||
+            prior.subject !== threadSubject ||
+            prior.audienceLabel !== audienceLabel
+          )
             return fail("درخواست تکراری با اطلاعات متفاوت است.");
           continue;
         }
         const threadId = thread ? String(thread) : id;
         await tx.inboxMessage.create({
-          data: { id, threadId, senderId: actor.id, recipientId, body },
+          data: {
+            id,
+            threadId,
+            senderId: actor.id,
+            recipientId,
+            body,
+            subject: threadSubject,
+            audienceLabel,
+          },
         });
         await emitNotification(tx, {
           userId: recipientId,
@@ -115,14 +154,14 @@ export async function sendInbox(form: FormData) {
           category: "operational",
           title: "پیام جدید",
           body: "یک پیام جدید در صندوق پیام‌ها دارید.",
-          href: "/inbox?thread=" + threadId,
+          href: "/inbox/thread/" + threadId,
           channels,
         });
       }
     },
     { timeout: 30000 },
   );
-  revalidatePath("/inbox");
+  revalidatePath("/inbox", "layout");
 }
 
 export async function readInbox(form: FormData) {
@@ -133,7 +172,7 @@ export async function readInbox(form: FormData) {
     where: { threadId, recipientId: actor.id, readAt: null },
     data: { readAt: new Date() },
   });
-  revalidatePath("/inbox");
+  revalidatePath("/inbox", "layout");
 }
 
 export async function sendInboxResult(
@@ -142,7 +181,13 @@ export async function sendInboxResult(
 ) {
   try {
     await sendInbox(form);
-    return { ok: true, message: "پیام در صندوق گیرندگان ثبت شد." };
+    return {
+      ok: true,
+      message: "پیام در صندوق گیرندگان ثبت شد.",
+      href: form.get("thread")
+        ? "/inbox/thread/" + String(form.get("thread"))
+        : "/inbox/sent",
+    };
   } catch (error) {
     if (
       error instanceof Error &&
@@ -152,6 +197,7 @@ export async function sendInboxResult(
       throw error;
     return {
       ok: false,
+      href: "",
       message:
         error instanceof DomainError
           ? error.message

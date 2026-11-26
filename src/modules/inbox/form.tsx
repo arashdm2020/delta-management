@@ -1,5 +1,6 @@
 "use client";
-import { useActionState, useState } from "react";
+import { useActionState, useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { sendInboxResult } from "./actions";
 import { Button } from "@/components/ui/button";
 
@@ -12,10 +13,18 @@ export function InboxForm({
   className?: string;
   id?: string;
 }) {
+  const router = useRouter();
   const [state, action, pending] = useActionState(sendInboxResult, {
     ok: false,
     message: "",
+    href: "",
   });
+  useEffect(() => {
+    if (state.ok && state.href) {
+      router.push(state.href);
+      router.refresh();
+    }
+  }, [state.ok, state.href, router]);
   return (
     <form id={id} action={action} className={className}>
       <fieldset disabled={pending} className="contents">

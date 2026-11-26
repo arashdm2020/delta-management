@@ -835,6 +835,8 @@ model UnitDebt {
   @@index([unitId, periodKey])
 }
 model InboxMessage {
+  subject     String? @db.VarChar(200)
+  audienceLabel String? @db.VarChar(200)
   id          String   @id @db.Uuid
   senderId    String   @db.Uuid
   recipientId String   @db.Uuid

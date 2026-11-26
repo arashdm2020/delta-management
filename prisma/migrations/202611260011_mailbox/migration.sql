@@ -1,0 +1,1 @@
+ALTER TABLE "InboxMessage" ADD COLUMN subject VARCHAR(200), ADD COLUMN "audienceLabel" VARCHAR(200);

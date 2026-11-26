@@ -1312,18 +1312,168 @@ test("Faraz HTTP throttling retries once per delivery while uncertain submission
 });
 test("inbox participants, immutable history and idempotent delivery stay private", async () => {
   const id = randomUUID();
-  await db.$transaction(async tx => {
-    await tx.inboxMessage.create({data:{id,threadId:id,senderId:admin.id,recipientId:tenant.id,body:"Private test"}});
-    const input={userId:tenant.id,eventKey:"inbox:"+id,category:"operational" as const,title:"Message",body:"Private",href:"/inbox",channels:["INAPP" as const]};
-    await N.emitNotification(tx,input);
-    await N.emitNotification(tx,input);
+  await db.$transaction(async (tx) => {
+    await tx.inboxMessage.create({
+      data: {
+        id,
+        threadId: id,
+        senderId: admin.id,
+        recipientId: tenant.id,
+        body: "Private test",
+      },
+    });
+    const input = {
+      userId: tenant.id,
+      eventKey: "inbox:" + id,
+      category: "operational" as const,
+      title: "Message",
+      body: "Private",
+      href: "/inbox",
+      channels: ["INAPP" as const],
+    };
+    await N.emitNotification(tx, input);
+    await N.emitNotification(tx, input);
   });
-  assert.equal(await db.notification.count({where:{eventKey:"inbox:"+id}}),1);
-  assert.equal(await db.inboxMessage.count({where:{threadId:id,OR:[{senderId:outsider.id},{recipientId:outsider.id}]}}),0);
-  await assert.rejects(db.inboxMessage.create({data:{id:randomUUID(),threadId:id,senderId:outsider.id,recipientId:tenant.id,body:"intrusion"}}));
-  await assert.rejects(db.inboxMessage.update({where:{id},data:{body:"overwrite"}}));
-  assert.equal((await db.inboxMessage.updateMany({where:{threadId:id,recipientId:outsider.id,readAt:null},data:{readAt:new Date()}})).count,0);
-  assert.equal((await db.inboxMessage.updateMany({where:{threadId:id,recipientId:tenant.id,readAt:null},data:{readAt:new Date()}})).count,1);
-  assert.equal((await db.inboxMessage.updateMany({where:{threadId:id,recipientId:tenant.id,readAt:null},data:{readAt:new Date()}})).count,0);
-  await assert.rejects(db.inboxMessage.delete({where:{id}}));
+  assert.equal(
+    await db.notification.count({ where: { eventKey: "inbox:" + id } }),
+    1,
+  );
+  assert.equal(
+    await db.inboxMessage.count({
+      where: {
+        threadId: id,
+        OR: [{ senderId: outsider.id }, { recipientId: outsider.id }],
+      },
+    }),
+    0,
+  );
+  await assert.rejects(
+    db.inboxMessage.create({
+      data: {
+        id: randomUUID(),
+        threadId: id,
+        senderId: outsider.id,
+        recipientId: tenant.id,
+        body: "intrusion",
+      },
+    }),
+  );
+  await assert.rejects(
+    db.inboxMessage.update({ where: { id }, data: { body: "overwrite" } }),
+  );
+  assert.equal(
+    (
+      await db.inboxMessage.updateMany({
+        where: { threadId: id, recipientId: outsider.id, readAt: null },
+        data: { readAt: new Date() },
+      })
+    ).count,
+    0,
+  );
+  assert.equal(
+    (
+      await db.inboxMessage.updateMany({
+        where: { threadId: id, recipientId: tenant.id, readAt: null },
+        data: { readAt: new Date() },
+      })
+    ).count,
+    1,
+  );
+  assert.equal(
+    (
+      await db.inboxMessage.updateMany({
+        where: { threadId: id, recipientId: tenant.id, readAt: null },
+        data: { readAt: new Date() },
+      })
+    ).count,
+    0,
+  );
+  await assert.rejects(db.inboxMessage.delete({ where: { id } }));
+});
+test("mailbox scopes received, sent, subjects and read receipts to conversation participants", async () => {
+  const { mailbox, privateThread } =
+    await import("../src/modules/inbox/queries");
+  const id = randomUUID();
+  const replyId = randomUUID();
+  await db.inboxMessage.create({
+    data: {
+      id,
+      threadId: id,
+      senderId: admin.id,
+      recipientId: tenant.id,
+      subject: "Mailbox focused regression",
+      audienceLabel: "واحد COMM-TEST-1",
+      body: "Original private body",
+    },
+  });
+  await db.inboxMessage.create({
+    data: {
+      id: replyId,
+      threadId: id,
+      senderId: tenant.id,
+      recipientId: admin.id,
+      subject: "Mailbox focused regression",
+      audienceLabel: "واحد COMM-TEST-1",
+      body: "Reply private body",
+    },
+  });
+  const received = await mailbox(tenant, "received", {
+    q: "Mailbox focused regression",
+    filter: "unread",
+  });
+  assert.equal(received.total, 1);
+  assert.equal(received.rows[0].id, id);
+  assert.equal(received.rows[0].audienceLabel, "واحد COMM-TEST-1");
+  const sent = await mailbox(admin, "sent", {
+    q: "Mailbox focused regression",
+  });
+  assert.equal(sent.total, 1);
+  assert.equal(sent.rows[0].recipientId, tenant.id);
+  assert.equal(sent.people.get(tenant.id)?.name?.includes("tenant"), true);
+  await assert.rejects(mailbox(outsider, "received", {q:"Mailbox focused regression"}));
+  assert.equal((await mailbox(other, "received", {q:"Mailbox focused regression"})).total,0);
+  await assert.rejects(privateThread(other,id));
+  await assert.rejects(privateThread(outsider, id));
+  const thread = await privateThread(tenant, id);
+  assert.deepEqual(
+    thread.rows.map((row) => row.id),
+    [id, replyId],
+  );
+  await assert.rejects(
+    db.inboxMessage.update({
+      where: { id },
+      data: { subject: "Rewrite private history" },
+    }),
+  );
+  await db.inboxMessage.updateMany({
+    where: { threadId: id, recipientId: tenant.id, readAt: null },
+    data: { readAt: new Date() },
+  });
+  assert.equal(
+    (
+      await mailbox(tenant, "received", {
+        q: "Mailbox focused regression",
+        filter: "unread",
+      })
+    ).total,
+    0,
+  );
+  assert.equal(
+    (
+      await mailbox(tenant, "received", {
+        q: "Mailbox focused regression",
+        filter: "read",
+      })
+    ).total,
+    1,
+  );
+  assert.equal(
+    (
+      await mailbox(admin, "received", {
+        q: "Mailbox focused regression",
+        filter: "unread",
+      })
+    ).total,
+    1,
+  );
 });

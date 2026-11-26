@@ -42,7 +42,11 @@ export async function GET(request: Request) {
               where: { recipientId: user!.id, readAt: null },
             }),
             db.notification.count({
-              where: { userId: user!.id, readAt: null },
+              where: {
+                userId: user!.id,
+                readAt: null,
+                NOT: { eventKey: { startsWith: "inbox:" } },
+              },
             }),
           ]);
           if (closed) return;

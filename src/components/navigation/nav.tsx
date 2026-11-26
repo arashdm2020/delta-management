@@ -1,4 +1,5 @@
 "use client";
+import { MailBadge } from "@/modules/inbox/counts";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -90,7 +91,10 @@ export function Navigation({
           }
         >
           <Icon size={mobile ? 20 : 19} aria-hidden />
-          <span>{label}</span>
+          <span className="inline-flex items-center gap-2">
+            {label}
+            {href === "/inbox" && <MailBadge />}
+          </span>
         </Link>
       ))}
     </nav>

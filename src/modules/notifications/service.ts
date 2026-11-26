@@ -13,12 +13,7 @@ export const defaultPreferences = {
   sms: false,
 };
 export type Category =
-  | "general"
-  | "financial"
-  | "meetings"
-  | "tickets"
-  | "operational"
-  | "security";
+  "general" | "financial" | "meetings" | "tickets" | "operational" | "security";
 export function categoryAllowed(
   preference: typeof defaultPreferences,
   category: Category,
@@ -120,18 +115,20 @@ export async function emitNotification(
     },
     update: {},
   });
-  const devices = preference.push && (!channels || channels.includes("PUSH"))
-    ? await tx.pushSubscription.findMany({
-        where: {
-          userId: input.userId,
-          revokedAt: null,
-          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
-        },
-        select: { id: true },
-      })
-    : [];
+  const devices =
+    preference.push && (!channels || channels.includes("PUSH"))
+      ? await tx.pushSubscription.findMany({
+          where: {
+            userId: input.userId,
+            revokedAt: null,
+            OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+          },
+          select: { id: true },
+        })
+      : [];
   for (const device of devices) await delivery("PUSH", device.id, device.id);
-  if (preference.sms && (!channels || channels.includes("SMS"))) await delivery("SMS", input.userId);
+  if (preference.sms && (!channels || channels.includes("SMS")))
+    await delivery("SMS", input.userId);
   async function delivery(
     channel: "PUSH" | "SMS",
     targetKey: string,
@@ -187,7 +184,7 @@ export async function notificationList(actor: Actor, rawPage = 1) {
   const page = pageNumber(rawPage);
   const [rows, total, unread] = await Promise.all([
     db.notification.findMany({
-      where: { userId: actor.id },
+      where: { userId: actor.id, NOT: { eventKey: { startsWith: "inbox:" } } },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       skip: (page - 1) * 20,
       take: 20,
@@ -202,14 +199,28 @@ export async function notificationList(actor: Actor, rawPage = 1) {
         createdAt: true,
       },
     }),
-    db.notification.count({ where: { userId: actor.id } }),
-    db.notification.count({ where: { userId: actor.id, readAt: null } }),
+    db.notification.count({
+      where: { userId: actor.id, NOT: { eventKey: { startsWith: "inbox:" } } },
+    }),
+    db.notification.count({
+      where: {
+        userId: actor.id,
+        readAt: null,
+        NOT: { eventKey: { startsWith: "inbox:" } },
+      },
+    }),
   ]);
   return { rows, total, unread, page };
 }
 export async function unreadCount(actor: Actor) {
   if (actor.status !== "APPROVED") return 0;
-  return db.notification.count({ where: { userId: actor.id, readAt: null } });
+  return db.notification.count({
+    where: {
+      userId: actor.id,
+      readAt: null,
+      NOT: { eventKey: { startsWith: "inbox:" } },
+    },
+  });
 }
 export async function markNotification(actor: Actor, id: string, read = true) {
   await member(actor);
