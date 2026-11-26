@@ -8,7 +8,7 @@ try {
       key: "delta",
       name: "ساختمان دلتا",
       city: "اردبیل",
-      capacity: 18,
+      capacity: 30,
     },
     update: {},
   });

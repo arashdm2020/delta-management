@@ -109,7 +109,7 @@ export async function discoverAccessibleLines(
     if (!response.ok)
       throw new SenderDiscoveryError(
         "LINES_PROVIDER",
-        "سرویس خطوط موقتاً در دسترس نیست؛ دوباره تلاش کنید. تنظیمات قبلی تغییر نکرده است.",
+        `سرویس خطوط پاسخ ناموفق داد (HTTP ${response.status})؛ تنظیمات قبلی تغییر نکرده است.`,
       );
     let body: unknown;
     try {

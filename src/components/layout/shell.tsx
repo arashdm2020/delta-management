@@ -1,5 +1,6 @@
+import { InboxLink } from "@/modules/inbox/link";
 import Link from "next/link";
-import { Bell, Building2, ShieldCheck, ChevronLeft } from "lucide-react";
+import { Building2, ShieldCheck, ChevronLeft } from "lucide-react";
 import { Navigation, DesktopExtra } from "@/components/navigation/nav";
 import { jalali } from "@/lib/dates";
 import { canManage, type Actor } from "@/lib/security/core";
@@ -58,21 +59,7 @@ export async function Shell({
             <span className="hidden text-xs text-secondary sm:block">
               {jalali(new Date())}
             </span>
-            <Link
-              aria-label={"مرکز اعلان‌ها، " + unread + " خوانده‌نشده"}
-              href="/notifications"
-              className="relative grid size-11 place-items-center rounded-full bg-white text-primary"
-            >
-              <Bell size={19} />
-              {unread > 0 && (
-                <span
-                  data-testid="unread-badge"
-                  className="absolute -right-1 -top-1 min-w-5 rounded-full bg-primary px-1 text-center text-[10px] text-white"
-                >
-                  {new Intl.NumberFormat("fa-IR").format(unread)}
-                </span>
-              )}
-            </Link>
+            <InboxLink initialNotifications={unread} />
           </div>
         </header>
         <main

@@ -27,7 +27,7 @@ export const patternsSchema = z.partialRecord(
 );
 function key() {
   return createHash("sha256")
-    .update("delta-sms:" + secret())
+    .update("delta-sms:" + (process.env.SMS_ENCRYPTION_SECRET || secret()))
     .digest();
 }
 export function encryptSmsKey(value: string) {
@@ -52,7 +52,7 @@ export function decryptSmsKey(value: string) {
 }
 export function senderCredentialHash(apiKey: string) {
   return createHash("sha256")
-    .update("delta-sender:" + secret() + ":" + apiKey)
+    .update("delta-sender:" + (process.env.SMS_ENCRYPTION_SECRET || secret()) + ":" + apiKey)
     .digest("hex");
 }
 export function providerKey(
@@ -88,10 +88,12 @@ export async function saveSmsSettings(actor: Actor, input: unknown) {
     )
       fail("تنظیمات هم‌زمان تغییر کرده است؛ صفحه را تازه کنید.");
     const apiKey = data.clearApiKey ? "" : data.apiKey || providerKey(previous);
-    const changed = Boolean(
-      data.apiKey &&
-      (!previous?.encryptedApiKey || apiKey !== providerKey(previous)),
-    );
+    let previousKey: string | null = null;
+    if (previous?.encryptedApiKey) {
+      try { previousKey = providerKey(previous); }
+      catch { if (!data.apiKey && !data.clearApiKey) fail("کلید قبلی قابل بازیابی نیست؛ کلید API را مجدداً وارد کنید."); }
+    }
+    const changed = Boolean(data.apiKey && apiKey !== previousKey);
     const encryptedApiKey = data.clearApiKey
       ? null
       : data.apiKey
@@ -170,7 +172,8 @@ export async function smsSettingsView(actor: Actor) {
   const setting = await db.smsProviderSetting.findUnique({
     where: { key: "farazsms" },
   });
-  const apiKey = providerKey(setting);
+  let apiKey = "";
+  try { apiKey = providerKey(setting); } catch { /* Re-entry remains available after approved rotation. */ }
   const bound = Boolean(
     apiKey && setting?.senderKeyHash === senderCredentialHash(apiKey),
   );

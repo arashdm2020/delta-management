@@ -188,8 +188,6 @@ async function ensureBoardSmsConfigured() {
     process.env.NOTIFICATION_SMS_PROVIDER === "development"
   )
     return;
-  if (process.env.BOARD_SMS_PATTERN_VERIFIED !== "true")
-    fail("ارسال پترن هیئت‌مدیره هنوز تأیید نشده است.");
   const { template } = await farazPatternConfiguration(event);
   mappedVariables(
     event,
@@ -271,14 +269,18 @@ export async function dispatchBoardSms(payload: Record<string, unknown>) {
       phone: z.string(),
     })
     .parse(payload);
+  const actor = await db.user.findUniqueOrThrow({
+    where: { id: actorId }, include: { roles: { include: { role: true } } },
+  });
+  if (!canManage(actor)) throw new Error("ACCESS_REVOKED");
+  await ensureBoardSmsConfigured();
   const claimed = await db.$transaction(async (tx) => {
     await lock(tx, "board-sms:" + deliveryId);
-    if (
-      await tx.auditLog.findFirst({
-        where: { action: "sms.board.claimed", targetId: deliveryId },
-      })
-    )
-      return false;
+    const previous = await tx.auditLog.findFirst({
+      where: { action: { in: ["sms.board.claimed", "sms.board.retry"] }, targetId: deliveryId },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    });
+    if (previous?.action === "sms.board.claimed") return false;
     await audit("sms.board.claimed", actorId, deliveryId, {}, tx);
     return true;
   });
@@ -299,6 +301,8 @@ export async function dispatchBoardSms(payload: Record<string, unknown>) {
     });
     await audit("sms.board.result", actorId, deliveryId, result);
   } catch (error) {
+    const diagnostic = smsFailureDiagnostic(error);
+    // Provider documentation does not guarantee non-acceptance for HTTP 429.
     await audit("sms.board.result", actorId, deliveryId, {
       status: "UNCONFIRMED",
       diagnostic: smsFailureDiagnostic(error),

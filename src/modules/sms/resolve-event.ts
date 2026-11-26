@@ -3,7 +3,7 @@ import { jalali } from "@/lib/dates";
 import { rialToToman } from "@/lib/utils";
 import { invoiceState } from "@/modules/financial-reports/service";
 import { reminderPolicy } from "./template-service";
-import type { SmsEvent } from "./events";
+import { inboxSmsText, type SmsEvent } from "./events";
 const day = 86400000;
 export async function resolveNotificationSms(
   notificationId: string,
@@ -13,6 +13,13 @@ export async function resolveNotificationSms(
     where: { id: notificationId },
   });
   const [kind, id, stage, extra] = notification.eventKey.split(":");
+  if (kind === "inbox") {
+    const message = await db.inboxMessage.findFirst({
+      where: { id, recipientId: notification.userId, readAt: null },
+      select: { id: true },
+    });
+    return message ? { event: "inbox.message", payload: { message: inboxSmsText } } : null;
+  }
   if (kind === "invoice") {
     const invoice = await db.invoice.findUnique({
       where: { id },

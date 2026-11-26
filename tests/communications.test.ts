@@ -1310,3 +1310,20 @@ test("Faraz HTTP throttling retries once per delivery while uncertain submission
     process.env.NOTIFICATION_SMS_PROVIDER = oldProvider;
   }
 });
+test("inbox participants, immutable history and idempotent delivery stay private", async () => {
+  const id = randomUUID();
+  await db.$transaction(async tx => {
+    await tx.inboxMessage.create({data:{id,threadId:id,senderId:admin.id,recipientId:tenant.id,body:"Private test"}});
+    const input={userId:tenant.id,eventKey:"inbox:"+id,category:"operational" as const,title:"Message",body:"Private",href:"/inbox",channels:["INAPP" as const]};
+    await N.emitNotification(tx,input);
+    await N.emitNotification(tx,input);
+  });
+  assert.equal(await db.notification.count({where:{eventKey:"inbox:"+id}}),1);
+  assert.equal(await db.inboxMessage.count({where:{threadId:id,OR:[{senderId:outsider.id},{recipientId:outsider.id}]}}),0);
+  await assert.rejects(db.inboxMessage.create({data:{id:randomUUID(),threadId:id,senderId:outsider.id,recipientId:tenant.id,body:"intrusion"}}));
+  await assert.rejects(db.inboxMessage.update({where:{id},data:{body:"overwrite"}}));
+  assert.equal((await db.inboxMessage.updateMany({where:{threadId:id,recipientId:outsider.id,readAt:null},data:{readAt:new Date()}})).count,0);
+  assert.equal((await db.inboxMessage.updateMany({where:{threadId:id,recipientId:tenant.id,readAt:null},data:{readAt:new Date()}})).count,1);
+  assert.equal((await db.inboxMessage.updateMany({where:{threadId:id,recipientId:tenant.id,readAt:null},data:{readAt:new Date()}})).count,0);
+  await assert.rejects(db.inboxMessage.delete({where:{id}}));
+});

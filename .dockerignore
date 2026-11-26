@@ -1,0 +1,10 @@
+.git
+.vercel
+.next*
+.local
+node_modules
+.env*
+*.pem
+*.key
+coverage
+test-results

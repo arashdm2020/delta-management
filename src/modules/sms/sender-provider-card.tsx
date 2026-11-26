@@ -126,6 +126,10 @@ export function SenderProviderCard({
           ? "فعال با تأیید مدیر؛ تحویل آزمایش نشده"
           : "نیازمند تنظیم یا تأیید؛ ارسال آزمایشی انجام نمی‌شود"}
       </Badge>
+      <p className="mt-3 text-sm">{view.hasApiKey ? "کلید ذخیره شده و قابل رمزگشایی است." : "کلید قابل استفاده ثبت نشده؛ API Key را وارد کنید."}</p>
+      <p className="mt-2 text-xs text-secondary">
+        {view.checkedAt ? "آخرین بررسی خطوط: " + new Intl.DateTimeFormat("fa-IR", {dateStyle:"medium",timeStyle:"short",timeZone:"Asia/Tehran"}).format(new Date(view.checkedAt)) : "اعتبار خطوط هنوز بررسی نشده است."}
+      </p>
       <p className="mt-4 text-xs leading-7 text-secondary">
         کشف خطوط بر پایهٔ parser بستهٔ رسمی است و با پاسخ زندهٔ این حساب تأیید نشده
         است. خط قابل‌دسترسی الزاماً برای پترن مجاز نیست؛ خط اشتراکی یا خدماتیِ

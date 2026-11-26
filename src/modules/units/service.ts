@@ -39,7 +39,7 @@ export async function saveUnit(
       (await tx.unit.count({ where: { buildingId: building.id } })) >=
         building.capacity
     )
-      fail("هر ۱۸ واحد ساختمان ثبت شده است.");
+      fail("ظرفیت ۳۰ واحدی ساختمان تکمیل شده است.");
     const unit = data.id
       ? await tx.unit.update({
           where: { id: data.id, buildingId: building.id },

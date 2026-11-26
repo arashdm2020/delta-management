@@ -75,8 +75,10 @@ export async function emitNotification(
     body: string;
     href: string;
     mandatory?: boolean;
+    channels?: ("INAPP" | "PUSH" | "SMS")[];
   },
 ) {
+  const { channels, ...notificationData } = input;
   const preference =
     (await tx.notificationPreference.findUnique({
       where: { userId: input.userId },
@@ -99,7 +101,7 @@ export async function emitNotification(
     where: {
       userId_eventKey: { userId: input.userId, eventKey: input.eventKey },
     },
-    create: input,
+    create: notificationData,
     update: {},
   });
   await tx.notificationDelivery.upsert({
@@ -118,7 +120,7 @@ export async function emitNotification(
     },
     update: {},
   });
-  const devices = preference.push
+  const devices = preference.push && (!channels || channels.includes("PUSH"))
     ? await tx.pushSubscription.findMany({
         where: {
           userId: input.userId,
@@ -129,7 +131,7 @@ export async function emitNotification(
       })
     : [];
   for (const device of devices) await delivery("PUSH", device.id, device.id);
-  if (preference.sms) await delivery("SMS", input.userId);
+  if (preference.sms && (!channels || channels.includes("SMS"))) await delivery("SMS", input.userId);
   async function delivery(
     channel: "PUSH" | "SMS",
     targetKey: string,

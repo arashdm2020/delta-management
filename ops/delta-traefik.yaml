@@ -1,0 +1,13 @@
+http:
+  routers:
+    delta-management:
+      rule: Host(`delta.foxwd.tech`)
+      entryPoints: [websecure]
+      tls:
+        certResolver: letsencrypt
+      service: delta-management
+  services:
+    delta-management:
+      loadBalancer:
+        servers:
+          - url: http://127.0.0.1:3010

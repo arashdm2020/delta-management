@@ -111,7 +111,7 @@ model Building {
   name           String              @default("ساختمان دلتا") @db.VarChar(100)
   city           String              @default("اردبیل") @db.VarChar(100)
   address        String?             @db.VarChar(500)
-  capacity       Int                 @default(18)
+  capacity       Int                 @default(30)
   units          Unit[]
   boardTerms     BoardTerm[]
   createdAt      DateTime            @default(now()) @db.Timestamptz(3)
@@ -833,4 +833,17 @@ model UnitDebt {
 
   @@unique([unitId, reference])
   @@index([unitId, periodKey])
+}
+model InboxMessage {
+  id          String   @id @db.Uuid
+  senderId    String   @db.Uuid
+  recipientId String   @db.Uuid
+  threadId    String   @db.Uuid
+  body        String   @db.VarChar(4000)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  readAt      DateTime? @db.Timestamptz(3)
+
+  @@index([recipientId, readAt])
+  @@index([senderId, createdAt])
+  @@index([threadId, createdAt])
 }

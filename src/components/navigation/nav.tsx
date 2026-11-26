@@ -106,6 +106,7 @@ export function DesktopExtra({ manager }: { manager: boolean }) {
       <Link className="nav-extra" href="/meetings">
         جلسات ساختمان
       </Link>
+      <Link className="nav-extra" href="/inbox">صندوق پیام‌ها</Link>
       <Link className="nav-extra" href="/notifications">
         مرکز اعلان‌ها
       </Link>

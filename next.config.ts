@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 import { developmentOriginRedirects } from "./src/lib/security/development-origin";
 const config: NextConfig = {
+  output: "standalone",
   poweredByHeader: false,
   distDir:
     process.env.DELTA_ACCEPTANCE_DIST === "true" ? ".next-acceptance" : ".next",

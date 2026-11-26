@@ -18,7 +18,7 @@ export default async function Building() {
         </Link>
       )}
       <h2 className="mb-4 text-lg font-bold">اطلاعات ساختمان دلتا</h2>
-      <p className="page-description mb-6">اردبیل · ظرفیت ثابت ۱۸ واحد</p>
+      <p className="page-description mb-6">اردبیل · ظرفیت ۳۰ واحد</p>
       {hasRole(actor, "SUPER_ADMIN") ? (
         <ActionForm>
           <input name="operation" type="hidden" value="building" />

@@ -21,7 +21,11 @@ export async function refreshSenderLines(
     fail("تنظیمات تغییر کرده؛ صفحه را تازه کنید.");
   const apiKey = newApiKey.trim() || providerKey(before);
   const lines = await discoverAccessibleLines(apiKey, transport);
-  const changed = !before?.encryptedApiKey || providerKey(before) !== apiKey;
+  let previousKey = "";
+  try { previousKey = providerKey(before); } catch {
+    if (!newApiKey.trim()) fail("کلید قبلی با رمزنگاری فعلی قابل بازیابی نیست؛ API Key را دوباره وارد کنید.");
+  }
+  const changed = !before?.encryptedApiKey || previousKey !== apiKey;
   const selected = selectDiscoveredSender(
     lines,
     before?.fromNumber || "",

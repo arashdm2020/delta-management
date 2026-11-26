@@ -1,6 +1,13 @@
 import { z } from "zod";
 const text = z.string().trim().min(1).max(300);
+export const inboxSmsText = "پیام جدید در سامانه ساختمان؛ برای مشاهده وارد سامانه شوید." as const;
 export const smsEvents = {
+  "inbox.message": {
+    pattern: "delta_inbox_message",
+    title: "پیام جدید صندوق پیام‌ها",
+    category: "operational",
+    schema: z.object({ message: z.literal(inboxSmsText) }).strict(),
+  },
   "auth.otp": {
     pattern: "delta_login",
     title: "کد ورود",

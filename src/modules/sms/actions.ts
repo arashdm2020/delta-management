@@ -15,6 +15,9 @@ export async function smsSettingsAction(
 ): Promise<SmsActionResult> {
   const actor = await requireSuperAdmin();
   await assertOrigin();
+  if (process.env.SMS_SETTINGS_READ_ONLY === "true")
+    return { ok: false, message: "تنظیمات مشترک پیامک تا هماهنگی انتقال نهایی فقط خواندنی است." };
+
   const value = (key: string) => String(form.get(key) || "").trim();
   const providerView = async (): Promise<SenderPublicView> => {
     const v = await smsSettingsView(actor);

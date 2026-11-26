@@ -41,7 +41,7 @@ export const subscriptionSchema = z.object({
 export type Subscription = z.infer<typeof subscriptionSchema>;
 function encryptionKey() {
   return createHash("sha256")
-    .update("delta-push:" + secret())
+    .update("delta-push:" + (process.env.PUSH_ENCRYPTION_SECRET || secret()))
     .digest();
 }
 function encrypt(value: Subscription) {
