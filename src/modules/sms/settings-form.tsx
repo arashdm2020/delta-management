@@ -78,10 +78,10 @@ function PatternEditor({ template }: { template: Template }) {
           </label>
         ))}
       </fieldset>
-      {event === "announcement.emergency" && (
+      {requiredVariables(event).length === 0 && (
         <p className="text-xs leading-6 text-secondary">
-          فقط متن کنترل‌شدهٔ «اطلاعیه اضطراری ساختمان؛ برای مشاهده جزئیات وارد
-          سامانه شوید.» ارسال می‌شود؛ متن آزاد اطلاعیه به سرویس منتقل نمی‌شود.
+          پترن ثابت بدون متغیر؛ متن تأییدشده باید مراجعه به https://delta.foxwd.tech را اعلام کند.
+          متن کامل پیام در صندوق پیام‌های سامانه ثبت می‌شود.
         </p>
       )}
       <label className="field">

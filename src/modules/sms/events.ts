@@ -6,7 +6,7 @@ export const smsEvents = {
     pattern: "delta_inbox_message",
     title: "پیام جدید صندوق پیام‌ها",
     category: "operational",
-    schema: z.object({ message: z.literal(inboxSmsText) }).strict(),
+    schema: z.object({}).strict(),
   },
   "auth.otp": {
     pattern: "delta_login",
@@ -64,25 +64,13 @@ export const smsEvents = {
     pattern: "delta_board_announcement",
     title: "اطلاعیه هیئت‌مدیره",
     category: "operational",
-    schema: z
-      .object({
-        message: z.enum([
-          "اطلاعیه ساختمان؛ برای مشاهده جزئیات وارد سامانه شوید.",
-        ]),
-      })
-      .strict(),
+    schema: z.object({}).strict(),
   },
   "announcement.emergency": {
     pattern: "delta_urgent_alert",
     title: "اطلاعیه اضطراری",
     category: "operational",
-    schema: z
-      .object({
-        message: z.enum([
-          "اطلاعیه اضطراری ساختمان؛ برای مشاهده جزئیات وارد سامانه شوید.",
-        ]),
-      })
-      .strict(),
+    schema: z.object({}).strict(),
   },
 } as const;
 export type SmsEventKey = keyof typeof smsEvents;

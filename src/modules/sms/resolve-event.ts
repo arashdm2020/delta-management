@@ -3,7 +3,7 @@ import { jalali } from "@/lib/dates";
 import { rialToToman } from "@/lib/utils";
 import { invoiceState } from "@/modules/financial-reports/service";
 import { reminderPolicy } from "./template-service";
-import { inboxSmsText, type SmsEvent } from "./events";
+import { type SmsEvent } from "./events";
 const day = 86400000;
 export async function resolveNotificationSms(
   notificationId: string,
@@ -18,7 +18,7 @@ export async function resolveNotificationSms(
       where: { id, recipientId: notification.userId, readAt: null },
       select: { id: true },
     });
-    return message ? { event: "inbox.message", payload: { message: inboxSmsText } } : null;
+    return message ? { event: "inbox.message", payload: {} } : null;
   }
   if (kind === "invoice") {
     const invoice = await db.invoice.findUnique({
@@ -166,7 +166,6 @@ export async function resolveNotificationSms(
     const announcement = await db.announcement.findUnique({ where: { id } });
     if (
       !announcement ||
-      announcement.category !== "EMERGENCY" ||
       announcement.status !== "PUBLISHED" ||
       (announcement.expiresAt && announcement.expiresAt <= now) ||
       !(await db.announcementRecipient.count({
@@ -175,11 +174,8 @@ export async function resolveNotificationSms(
     )
       return null;
     return {
-      event: "announcement.emergency",
-      payload: {
-        message:
-          "اطلاعیه اضطراری ساختمان؛ برای مشاهده جزئیات وارد سامانه شوید.",
-      },
+      event: announcement.category === "EMERGENCY" ? "announcement.emergency" : "announcement.board",
+      payload: {},
     };
   }
   return null;

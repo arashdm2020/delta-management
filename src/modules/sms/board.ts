@@ -191,7 +191,7 @@ async function ensureBoardSmsConfigured() {
   const { template } = await farazPatternConfiguration(event);
   mappedVariables(
     event,
-    { message: announcementSms },
+    {},
     template.variableMapping,
   );
 }
@@ -294,7 +294,7 @@ export async function dispatchBoardSms(payload: Record<string, unknown>) {
     await ensureBoardSmsConfigured();
     const result = await notificationSmsProvider().send({
       phone,
-      event: { event, payload: { message: announcementSms } },
+      event: { event, payload: {} },
       content: announcementSms,
       template: event,
       idempotencyKey: deliveryId,

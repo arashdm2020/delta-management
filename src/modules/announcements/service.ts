@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { type Actor, canManage, fail } from "@/lib/security/core";
@@ -167,6 +168,16 @@ export async function publishAnnouncement(
           create: { announcementId: id, userId: user.id },
           update: {},
         });
+        if (user.id !== actor.id) {
+          const threadId = randomUUID();
+          const fullText = record.title + "\n\n" + record.content;
+          for (let offset = 0; offset < fullText.length; offset += 4000) {
+            await tx.inboxMessage.create({ data: {
+              id: offset === 0 ? threadId : randomUUID(), threadId,
+              senderId: actor.id, recipientId: user.id, body: fullText.slice(offset, offset + 4000),
+            } });
+          }
+        }
         const mandatory = record.category === "EMERGENCY";
         await emitNotification(tx, {
           userId: user.id,
