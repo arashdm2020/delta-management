@@ -1,11 +1,11 @@
-import { Button } from "@/components/ui/button";
+import { InboxForm, InboxRecipients } from "@/modules/inbox/form";
 import { randomUUID } from "node:crypto";
 import Link from "next/link";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireApproved } from "@/modules/auth/session";
 import { canManage } from "@/lib/security/core";
-import { readInbox, sendInbox } from "@/modules/inbox/actions";
+import { readInbox } from "@/modules/inbox/actions";
 import { jalaliTime } from "@/lib/dates";
 
 export default async function Inbox({
@@ -41,6 +41,24 @@ export default async function Inbox({
         })
       : [],
   ]);
+  const units = canManage(actor)
+    ? await db.unit.findMany({
+        where: {
+          active: true,
+          building: { key: "delta" },
+          memberships: {
+            some: {
+              userId: { not: actor.id },
+              startsAt: { lte: new Date() },
+              endsAt: null,
+              user: { status: "APPROVED" },
+            },
+          },
+        },
+        select: { number: true, floor: true },
+        orderBy: { number: "asc" },
+      })
+    : [];
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div className="flex justify-between">
@@ -86,10 +104,7 @@ export default async function Inbox({
               </small>
             </article>
           ))}
-          <form
-            action={sendInbox}
-            className="grid gap-4 rounded-2xl border border-border bg-white p-5"
-          >
+          <InboxForm className="grid gap-4 rounded-2xl border border-border bg-white p-5">
             <input type="hidden" name="requestId" value={randomUUID()} />
             <input type="hidden" name="thread" value={selected.data} />
             <label>
@@ -101,13 +116,11 @@ export default async function Inbox({
                 maxLength={4000}
               />
             </label>
-            <Button type="submit">ارسال پاسخ</Button>
-          </form>
+          </InboxForm>
         </section>
       )}
-      <form
+      <InboxForm
         id="compose"
-        action={sendInbox}
         className="scroll-mt-6 grid gap-4 rounded-2xl border border-border bg-white p-5"
       >
         {!canManage(actor) && (
@@ -122,39 +135,23 @@ export default async function Inbox({
             ? "ارسال پیام به ساکنان یا هیئت‌مدیره"
             : "ارسال پیام به هیئت‌مدیره"}
         </h2>
-        <label>
-          مخاطب{" "}
-          <select name="kind">
-            <option value="BOARD">هیئت‌مدیره و مدیریت</option>
-            {canManage(actor) && (
-              <>
-                <option value="USER">کاربر</option>
-                <option value="UNIT">واحد</option>
-                <option value="FLOOR">طبقه</option>
-                <option value="ROLE">نقش</option>
-                <option value="ALL">همه کاربران</option>
-              </>
-            )}
-          </select>
-        </label>
+        {!canManage(actor) && <input type="hidden" name="kind" value="BOARD" />}
         {canManage(actor) && (
           <>
-            <label>
-              کاربر، شمارهٔ واحد، طبقه یا نقش{" "}
-              <input name="target" list="inbox-targets" className="border" />
-            </label>
-            <datalist id="inbox-targets">
-              {users.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.name}
-                </option>
-              ))}
-              {["OWNER", "TENANT", "BOARD_MEMBER", "SUPER_ADMIN"].map(
-                (role) => (
-                  <option key={role} value={role} />
-                ),
-              )}
-            </datalist>
+            <InboxRecipients
+              users={users.map((u) => ({
+                value: u.id,
+                label: u.name || "نام ثبت نشده",
+              }))}
+              units={units.map((u) => ({
+                value: u.number,
+                label: "واحد " + u.number,
+              }))}
+              floors={[...new Set(units.map((u) => u.floor))].map((f) => ({
+                value: f,
+                label: "طبقه " + f,
+              }))}
+            />
             <label>
               <input type="checkbox" name="push" /> ارسال Web Push به دستگاه‌های
               مشترک
@@ -173,10 +170,7 @@ export default async function Inbox({
             maxLength={4000}
           />
         </label>
-        <Button type="submit">
-          {canManage(actor) ? "ارسال پیام" : "ارسال به هیئت‌مدیره"}
-        </Button>
-      </form>
+      </InboxForm>
     </div>
   );
 }

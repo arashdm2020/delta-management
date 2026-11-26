@@ -1,11 +1,12 @@
 "use server";
+import { normalizedDigits } from "@/modules/building-layout/layout";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireApproved } from "@/modules/auth/session";
 import { assertOrigin } from "@/modules/auth/http";
-import { canManage, fail } from "@/lib/security/core";
+import { canManage, fail, DomainError } from "@/lib/security/core";
 import { lock, rateLimit } from "@/modules/notifications/common";
 import { emitNotification } from "@/modules/notifications/service";
 
@@ -18,7 +19,10 @@ export async function sendInbox(form: FormData) {
   const kind = z
     .enum(["USER", "UNIT", "FLOOR", "ROLE", "ALL", "BOARD"])
     .parse(form.get("kind") || "BOARD");
-  const target = String(form.get("target") || "").trim();
+  const rawTarget = String(form.get("target") || "").trim();
+  const target = ["UNIT", "FLOOR"].includes(kind)
+    ? normalizedDigits(rawTarget)
+    : rawTarget;
   await db.$transaction(
     async (tx) => {
       await lock(tx, "inbox:" + actor.id + ":" + requestId);
@@ -81,8 +85,12 @@ export async function sendInbox(form: FormData) {
         });
         ids = users.map((u) => u.id).filter((id) => id !== actor.id);
       }
-      if (!ids.length || ids.length > 100)
-        return fail("تعداد گیرندگان معتبر نیست.");
+      if (!ids.length)
+        return fail(
+          "برای این مخاطب، حساب تأییدشده و مرتبطی پیدا نشد. ابتدا عضویت ساکن در واحد و وضعیت تأیید حساب را بررسی کنید.",
+        );
+      if (ids.length > 100)
+        return fail("در هر ارسال حداکثر ۱۰۰ گیرنده مجاز است.");
       const channels: ("INAPP" | "PUSH" | "SMS")[] = ["INAPP"];
       if (canManage(actor) && form.get("push") === "on") channels.push("PUSH");
       if (canManage(actor) && form.get("sms") === "on") channels.push("SMS");
@@ -126,4 +134,30 @@ export async function readInbox(form: FormData) {
     data: { readAt: new Date() },
   });
   revalidatePath("/inbox");
+}
+
+export async function sendInboxResult(
+  _previous: { ok: boolean; message: string },
+  form: FormData,
+) {
+  try {
+    await sendInbox(form);
+    return { ok: true, message: "پیام در صندوق گیرندگان ثبت شد." };
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      "digest" in error &&
+      String(error.digest).startsWith("NEXT_")
+    )
+      throw error;
+    return {
+      ok: false,
+      message:
+        error instanceof DomainError
+          ? error.message
+          : error instanceof z.ZodError
+            ? "مخاطب و متن پیام را بررسی کنید."
+            : "پیام ثبت نشد؛ دوباره تلاش کنید.",
+    };
+  }
 }
