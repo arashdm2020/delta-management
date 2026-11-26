@@ -174,7 +174,7 @@ export async function publishAnnouncement(
           for (let offset = 0; offset < fullText.length; offset += 4000) {
             await tx.inboxMessage.create({ data: {
               id: offset === 0 ? threadId : randomUUID(), threadId,
-              senderId: actor.id, recipientId: user.id, body: fullText.slice(offset, offset + 4000),
+              senderId: actor.id, recipientId: user.id, subject: record.title, body: fullText.slice(offset, offset + 4000),
             } });
           }
         }

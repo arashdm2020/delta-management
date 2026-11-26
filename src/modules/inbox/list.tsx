@@ -35,8 +35,8 @@ export async function MailboxList({
           {digits(data.total)} پیام
         </span>
       </div>
-      <form className="flex flex-wrap items-end gap-3" role="search">
-        <label className="field min-w-0 flex-1">
+      <form className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]" role="search">
+        <label className="field col-span-2 min-w-0 sm:col-span-1">
           <span className="flex items-center gap-2">
             <Search size={15} />
             جستجو در پیام‌ها
