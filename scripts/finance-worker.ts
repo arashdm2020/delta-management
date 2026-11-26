@@ -1,3 +1,4 @@
+import { writeFile } from "node:fs/promises";
 export {};
 if (!process.env.DATABASE_URL) process.loadEnvFile();
 const { runOneJob, queueMonthlyCharges } =
@@ -21,6 +22,7 @@ try {
       await queueCommunicationMaintenance();
       let completed = 0;
       while (completed < limit && (await runOneJob())) completed++;
+      await writeFile("/tmp/delta-worker-heartbeat", String(Date.now()));
       console.info(`Processed ${completed} outbox jobs.`);
     },
     { timeout: 180000 },
