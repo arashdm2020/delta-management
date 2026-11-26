@@ -95,7 +95,11 @@ export async function sendFarazEvent<K extends SmsEventKey>(
       response.status,
       "provider_status",
     );
-  const id = z.number().int().positive().safe().safeParse(envelope.data.data);
+  const messageId = z.number().int().positive().safe();
+  const id = z.union([
+    messageId,
+    z.object({ id: messageId }).transform((record) => record.id),
+  ]).safeParse(envelope.data.data);
   if (!id.success)
     throw new SmsProviderError("UNKNOWN", response.status, "message_id");
   return { status: "ACCEPTED" as const, providerMessageId: String(id.data) };
